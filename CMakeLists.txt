@@ -17,8 +17,8 @@ include(FetchContent)
 # SFML 2.6.x (скачивается автоматически при первой конфигурации)
 # Примеры на слайдах написаны под SFML 2.x — в 3.0 API другой.
 # ---------------------------------------------------------------------------
-set(BUILD_SHARED_LIBS OFF CACHE BOOL "" FORCE)   # статическая сборка: не нужно копировать .dll
-set(SFML_BUILD_AUDIO   OFF CACHE BOOL "" FORCE)  # звук пока не нужен (включите, когда понадобится)
+set(BUILD_SHARED_LIBS OFF CACHE BOOL "" FORCE)   # статическая сборка: SFML вшивается в exe
+set(SFML_BUILD_AUDIO   ON  CACHE BOOL "" FORCE)  # музыка
 set(SFML_BUILD_NETWORK OFF CACHE BOOL "" FORCE)
 FetchContent_Declare(SFML
     GIT_REPOSITORY https://github.com/SFML/SFML.git
@@ -47,6 +47,7 @@ add_library(horace_core
     src/core/Horace.cpp
     src/core/Car.cpp
     src/core/RoadLevel.cpp
+    src/core/SlopeLevel.cpp
     src/core/Game.cpp
 )
 target_include_directories(horace_core PUBLIC src)
@@ -58,7 +59,23 @@ add_executable(horace
     src/app/main.cpp
     src/app/Renderer.cpp
 )
-target_link_libraries(horace PRIVATE horace_core sfml-graphics sfml-window sfml-system)
+target_link_libraries(horace PRIVATE horace_core sfml-graphics sfml-audio sfml-window sfml-system)
+
+# Звук в SFML 2.x работает через OpenAL. На Windows рядом с horace.exe должен лежать
+# openal32.dll — копируем его из SFML после каждой сборки.
+if(WIN32)
+    if(CMAKE_SIZEOF_VOID_P EQUAL 8)
+        set(OPENAL_ARCH x64)
+    else()
+        set(OPENAL_ARCH x86)
+    endif()
+    add_custom_command(TARGET horace POST_BUILD
+        COMMAND ${CMAKE_COMMAND} -E copy_if_different
+                "${sfml_SOURCE_DIR}/extlibs/bin/${OPENAL_ARCH}/openal32.dll"
+                "$<TARGET_FILE_DIR:horace>"
+        COMMENT "Copy openal32.dll next to horace.exe")
+endif()
+
 # Путь к шрифтам и картинкам — чтобы игра находила их, откуда бы её ни запустили
 target_compile_definitions(horace PRIVATE HORACE_ASSETS_DIR="${CMAKE_CURRENT_SOURCE_DIR}/assets")
 
@@ -71,6 +88,7 @@ add_executable(horace_tests
     tests/HoraceTest.cpp
     tests/CarTest.cpp
     tests/RoadLevelTest.cpp
+    tests/SlopeLevelTest.cpp
     tests/GameTest.cpp
 )
 target_link_libraries(horace_tests PRIVATE horace_core GTest::gtest_main)

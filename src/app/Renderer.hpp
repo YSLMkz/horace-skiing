@@ -20,6 +20,7 @@ public:
 
 private:
     void drawRoad(sf::RenderTarget& target, const RoadLevel& road) const;
+    void drawSlope(sf::RenderTarget& target, const SlopeLevel& slope) const;
     void drawHud(sf::RenderTarget& target, const Game& game) const;
     void drawText(sf::RenderTarget& target, const std::string& utf8, float x, float y,
                   unsigned size, bool centered = false) const;

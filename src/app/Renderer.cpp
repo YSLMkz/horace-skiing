@@ -1,5 +1,6 @@
 #include "app/Renderer.hpp"
 
+#include <SFML/Graphics/ConvexShape.hpp>
 #include <SFML/Graphics/RectangleShape.hpp>
 #include <SFML/Graphics/Text.hpp>
 
@@ -16,6 +17,7 @@ const sf::Color kShopDoor(80, 45, 20);
 const sf::Color kHorace(90, 200, 90);
 const sf::Color kSkis(30, 60, 200);
 const sf::Color kText(20, 20, 40);
+const sf::Color kFlag(220, 40, 40);
 
 void drawRect(sf::RenderTarget& target, const Rect& r, sf::Color color) {
     sf::RectangleShape shape({r.width, r.height});
@@ -41,11 +43,7 @@ void Renderer::draw(sf::RenderTarget& target, const Game& game) const {
         drawRoad(target, game.road());
         break;
     case GameState::Slope:
-        // Заглушка до следующего этапа
-        drawText(target, "СКЛОН", w / 2, h / 2 - 60, 48, true);
-        drawText(target, "Спуск ещё не готов — это следующий этап.", w / 2, h / 2, 20, true);
-        drawText(target, "Enter — заезд окончен, лыжи целы", w / 2, h / 2 + 40, 20, true);
-        drawText(target, "B — заезд окончен, лыжи сломаны", w / 2, h / 2 + 70, 20, true);
+        drawSlope(target, game.slope());
         break;
     case GameState::GameOver:
         drawRoad(target, game.road());
@@ -88,6 +86,62 @@ void Renderer::drawRoad(sf::RenderTarget& target, const RoadLevel& road) const {
 
     const char* hint = road.hasSkis() ? "Лыжи есть! Вниз, к склону" : "Дойди до лавки за лыжами";
     drawText(target, hint, 10, RoadLevel::kHeight - 30, 18);
+}
+
+void Renderer::drawSlope(sf::RenderTarget& target, const SlopeLevel& slope) const {
+    // Всё на склоне хранится в мировых координатах.
+    // Чтобы нарисовать на экране, вычитаем положение камеры по y.
+    const float cam = slope.cameraY();
+    auto toScreen = [cam](Rect r) { r.y -= cam; return r; };
+    auto visible = [cam](float worldY) { return worldY > cam - 60 && worldY < cam + SlopeLevel::kScreenHeight + 60; };
+
+    // финишная линия — чёрно-белые клетки
+    if (visible(slope.courseLength())) {
+        const float y = slope.courseLength() - cam;
+        for (int i = 0; i * 20 < SlopeLevel::kWidth; ++i) {
+            drawRect(target, Rect{i * 20.f, y, 20, 10}, i % 2 ? sf::Color::Black : sf::Color::White);
+            drawRect(target, Rect{i * 20.f, y + 10, 20, 10}, i % 2 ? sf::Color::White : sf::Color::Black);
+        }
+        drawText(target, "ФИНИШ", SlopeLevel::kWidth / 2, y + 26, 28, true);
+    }
+
+    // ворота: два флажка; пройденные — зелёные, пропущенные — серые
+    for (const Gate& gate : slope.gates()) {
+        if (!visible(gate.y)) continue;
+        sf::Color flag = kFlag;
+        if (gate.resolved) flag = gate.passed ? kHorace : sf::Color(160, 160, 160);
+        for (float x : {gate.leftX - 4, gate.rightX - 4}) {
+            drawRect(target, toScreen(Rect{x + 3, gate.y - 30, 2, 30}), sf::Color(60, 60, 60));  // древко
+            drawRect(target, toScreen(Rect{x + 5, gate.y - 30, 14, 10}), flag);                 // флажок
+        }
+    }
+
+    // деревья: зелёный треугольник + ствол
+    for (const Tree& tree : slope.trees()) {
+        if (!visible(tree.bounds.y)) continue;
+        const Rect r = toScreen(tree.bounds);
+        sf::ConvexShape crown(3);
+        crown.setPoint(0, {r.x + r.width / 2, r.y});
+        crown.setPoint(1, {r.x, r.y + r.height - 8});
+        crown.setPoint(2, {r.x + r.width, r.y + r.height - 8});
+        crown.setFillColor(tree.hit ? sf::Color(120, 140, 120) : sf::Color(30, 120, 50));
+        target.draw(crown);
+        drawRect(target, Rect{r.x + r.width / 2 - 3, r.y + r.height - 8, 6, 8}, kShopDoor);
+    }
+
+    // лыжник: тело + две лыжи вниз; после удара о дерево — серый
+    const Rect s = toScreen(slope.skier());
+    drawRect(target, Rect{s.x + 3, s.y, s.width - 6, s.height - 6}, slope.isCrashed() ? sf::Color(150, 150, 150) : kHorace);
+    drawRect(target, Rect{s.x + 2, s.y + 4, 4, s.height}, kSkis);
+    drawRect(target, Rect{s.x + s.width - 6, s.y + 4, 4, s.height}, kSkis);
+
+    // состояние лыж
+    std::string skis = "Лыжи: ";
+    for (int i = 0; i < SlopeLevel::kMaxDamage; ++i) {
+        skis += i < SlopeLevel::kMaxDamage - slope.damage() ? "■" : "□";
+    }
+    drawText(target, skis, SlopeLevel::kWidth - 170, 8, 20);
+    drawText(target, "← → поворот, ↓ быстрее", 10, SlopeLevel::kScreenHeight - 30, 18);
 }
 
 void Renderer::drawHud(sf::RenderTarget& target, const Game& game) const {

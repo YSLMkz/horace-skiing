@@ -10,30 +10,65 @@ void Game::moveHorace(Direction dir) {
     }
 }
 
-void Game::update(float dt) {
-    if (state_ != GameState::Road) {
-        return;  // TODO: здесь будет slope_.update(dt) для состояния Slope
+void Game::setSteer(int dir) {
+    if (state_ == GameState::Slope) {
+        slope_.setSteer(dir);
     }
+}
 
-    switch (road_.update(dt)) {
-    case RoadEvent::HitByCar:
-        payAmbulance();
-        break;
-    case RoadEvent::ReachedShop:
-        rentSkis();
-        break;
-    case RoadEvent::ReachedSlope:
-        state_ = GameState::Slope;
-        break;
-    case RoadEvent::None:
-        break;
+void Game::setTuck(bool tuck) {
+    if (state_ == GameState::Slope) {
+        slope_.setTuck(tuck);
     }
+}
+
+void Game::update(float dt) {
+    switch (state_) {
+    case GameState::Road:     updateRoad(dt);  break;
+    case GameState::Slope:    updateSlope(dt); break;
+    case GameState::GameOver: break;
+    }
+}
+
+void Game::updateRoad(float dt) {
+    switch (road_.update(dt)) {
+    case RoadEvent::HitByCar:     payAmbulance(); break;
+    case RoadEvent::ReachedShop:  rentSkis();     break;
+    case RoadEvent::ReachedSlope: startSlope();   break;
+    case RoadEvent::None:         break;
+    }
+}
+
+void Game::updateSlope(float dt) {
+    for (SlopeEvent event : slope_.update(dt)) {
+        switch (event) {
+        case SlopeEvent::PassedGate:
+            score_ += kGatePoints;
+            break;
+        case SlopeEvent::Finished:
+            score_ += kFinishBonus;
+            finishRun(false);
+            break;
+        case SlopeEvent::SkisBroken:
+            finishRun(true);
+            break;
+        case SlopeEvent::MissedGate:
+        case SlopeEvent::HitTree:
+            break;  // очков нет; урон лыжам SlopeLevel считает сам
+        }
+    }
+}
+
+void Game::startSlope() {
+    state_ = GameState::Slope;
+    slope_.startRun(nextCourseSeed_++);  // каждый заезд — новая трасса
 }
 
 void Game::finishRun(bool skisBroken) {
     if (state_ != GameState::Slope) {
         return;
     }
+    ++runsCompleted_;
     state_ = GameState::Road;
     road_.placeAtShop();
     if (!skisBroken) {
