@@ -4,8 +4,8 @@
 
 namespace horace {
 
-Horace::Horace(float startX, float startY, float size, float step)
-    : bounds_{startX, startY, size, size}, startX_(startX), startY_(startY), step_(step) {}
+Horace::Horace(float size, float step)
+    : bounds_{0.f, 0.f, size, size}, step_(step) {}
 
 void Horace::move(Direction dir, float fieldWidth, float fieldHeight) {
     switch (dir) {
@@ -19,9 +19,9 @@ void Horace::move(Direction dir, float fieldWidth, float fieldHeight) {
     bounds_.y = std::clamp(bounds_.y, 0.f, fieldHeight - bounds_.height);
 }
 
-void Horace::resetToStart() {
-    bounds_.x = startX_;
-    bounds_.y = startY_;
+void Horace::setPosition(float x, float y) {
+    bounds_.x = x;
+    bounds_.y = y;
 }
 
 } // namespace horace

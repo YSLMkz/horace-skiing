@@ -5,6 +5,12 @@ set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_EXTENSIONS OFF)
 
+# Исходники в UTF-8 (русские комментарии и строки). Без этого флага Visual Studio
+# на русской Windows читает их как CP1251, и русский текст в игре превращается в кракозябры.
+if(MSVC)
+    add_compile_options(/utf-8)
+endif()
+
 include(FetchContent)
 
 # ---------------------------------------------------------------------------
@@ -40,6 +46,7 @@ add_library(horace_core
     src/core/Rect.cpp
     src/core/Horace.cpp
     src/core/Car.cpp
+    src/core/RoadLevel.cpp
     src/core/Game.cpp
 )
 target_include_directories(horace_core PUBLIC src)
@@ -52,6 +59,8 @@ add_executable(horace
     src/app/Renderer.cpp
 )
 target_link_libraries(horace PRIVATE horace_core sfml-graphics sfml-window sfml-system)
+# Путь к шрифтам и картинкам — чтобы игра находила их, откуда бы её ни запустили
+target_compile_definitions(horace PRIVATE HORACE_ASSETS_DIR="${CMAKE_CURRENT_SOURCE_DIR}/assets")
 
 # ---------------------------------------------------------------------------
 # 3) Модульные тесты
@@ -61,6 +70,7 @@ add_executable(horace_tests
     tests/RectTest.cpp
     tests/HoraceTest.cpp
     tests/CarTest.cpp
+    tests/RoadLevelTest.cpp
     tests/GameTest.cpp
 )
 target_link_libraries(horace_tests PRIVATE horace_core GTest::gtest_main)

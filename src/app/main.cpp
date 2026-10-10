@@ -3,35 +3,32 @@
 
 #include <SFML/Graphics.hpp>
 
-#include <string>
+#include <algorithm>
+#include <iostream>
 
-namespace {
-
-// Деньги и состояние пока выводим в заголовок окна — так не нужен файл шрифта.
-// TODO: заменить на sf::Text со своим шрифтом.
-std::string makeTitle(const horace::Game& game) {
-    std::string title = "Horace Goes Skiing | $" + std::to_string(game.money());
-    if (game.state() == horace::GameState::GameOver) {
-        title += " | GAME OVER (Esc - exit)";
-    }
-    return title;
-}
-
-} // namespace
+// HORACE_ASSETS_DIR задаётся в CMakeLists.txt — это путь к папке assets
+#ifndef HORACE_ASSETS_DIR
+#define HORACE_ASSETS_DIR "assets"
+#endif
 
 int main() {
     using horace::Direction;
     using horace::Game;
+    using horace::GameState;
+    using horace::RoadLevel;
 
     sf::RenderWindow window(
-        sf::VideoMode(static_cast<unsigned>(Game::kFieldWidth), static_cast<unsigned>(Game::kFieldHeight)),
+        sf::VideoMode(static_cast<unsigned>(RoadLevel::kWidth), static_cast<unsigned>(RoadLevel::kHeight)),
         "Horace Goes Skiing", sf::Style::Titlebar | sf::Style::Close);
     window.setFramerateLimit(60);
 
-    Game game;
     horace::Renderer renderer;
+    if (!renderer.loadFont(std::string(HORACE_ASSETS_DIR) + "/fonts/DejaVuSansMono.ttf")) {
+        std::cerr << "Font not found, text will not be shown\n";
+    }
+
+    Game game;
     sf::Clock clock;
-    std::string lastTitle;
 
     while (window.isOpen()) {
         // 1. Ввод
@@ -45,25 +42,27 @@ int main() {
                 case sf::Keyboard::Down:   game.moveHorace(Direction::Down);  break;
                 case sf::Keyboard::Left:   game.moveHorace(Direction::Left);  break;
                 case sf::Keyboard::Right:  game.moveHorace(Direction::Right); break;
-                case sf::Keyboard::Escape: window.close();                    break;
+                case sf::Keyboard::Enter:  game.finishRun(false);             break;  // временно
+                case sf::Keyboard::B:      game.finishRun(true);              break;  // временно
+                case sf::Keyboard::R:
+                    if (game.state() == GameState::GameOver) {
+                        game = Game();
+                    }
+                    break;
+                case sf::Keyboard::Escape: window.close(); break;
                 default: break;
                 }
             }
         }
 
         // 2. Логика: dt — сколько секунд прошло с прошлого кадра,
-        //    поэтому скорость машин не зависит от FPS
-        const float dt = clock.restart().asSeconds();
+        //    поэтому скорость машин не зависит от FPS.
+        //    Ограничиваем сверху: пока окно перетаскивают, игра «замирает»,
+        //    и без ограничения машины потом прыгнули бы на полэкрана.
+        const float dt = std::min(clock.restart().asSeconds(), 0.1f);
         game.update(dt);
 
-        const std::string title = makeTitle(game);
-        if (title != lastTitle) {
-            window.setTitle(title);
-            lastTitle = title;
-        }
-
         // 3. Отрисовка
-        window.clear(sf::Color(240, 240, 255));  // снег
         renderer.draw(window, game);
         window.display();
     }

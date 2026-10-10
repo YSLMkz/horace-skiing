@@ -10,17 +10,15 @@ enum class Direction { Up, Down, Left, Right };
 // не может выйти за пределы поля.
 class Horace {
 public:
-    Horace(float startX, float startY, float size, float step);
+    Horace(float size, float step);
 
     void move(Direction dir, float fieldWidth, float fieldHeight);
-    void resetToStart();
+    void setPosition(float x, float y);
 
     const Rect& bounds() const { return bounds_; }
 
 private:
     Rect bounds_;
-    float startX_;
-    float startY_;
     float step_;
 };
 
