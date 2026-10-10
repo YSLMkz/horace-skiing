@@ -39,7 +39,7 @@ sudo apt install build-essential cmake git \
 или `horace_tests` (тесты) и нажать ▶.
 
 **VS Code:** открыть папку, CMake Tools предложит выбрать компилятор (kit), затем
-внизу кнопки Build и ▶. Тесты — во вкладке Testing.
+внизу кнопки Build и ▶. Тесты во вкладке Testing.
 
 **Командная строка (любая ОС):**
 ```bash
