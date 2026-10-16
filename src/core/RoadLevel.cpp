@@ -39,11 +39,13 @@ void RoadLevel::giveSkis() {
     horace_.setPosition(kStartX, kShopDoorY);  // выходит из лавки на улицу
 }
 
-void RoadLevel::moveHorace(Direction dir) {
+bool RoadLevel::moveHorace(Direction dir) {
     if (ambulance_.isActive()) {
-        return;
+        return false;
     }
+    const Rect before = horace_.bounds();
     horace_.move(dir, kWidth, kHeight);
+    return horace_.bounds().x != before.x || horace_.bounds().y != before.y;
 }
 
 bool RoadLevel::isHoraceKnockedDown() const {

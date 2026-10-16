@@ -38,8 +38,9 @@ public:
     void placeAtShop();      // после заезда: у двери лавки, без лыж
     void giveSkis();         // лыжи получены — теперь надо идти вниз на склон
 
-    // Пока едет скорая, Хорас не слушается
-    void moveHorace(Direction dir);
+    // Возвращает true, если Хорас действительно сдвинулся
+    // (не сдвинется, если упёрся в край или пока едет скорая)
+    bool moveHorace(Direction dir);
     RoadEvent update(float dt);
 
     bool hasSkis() const { return hasSkis_; }

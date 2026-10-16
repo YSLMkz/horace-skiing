@@ -2,6 +2,9 @@
 
 #include <gtest/gtest.h>
 
+#include <algorithm>
+#include <vector>
+
 using horace::Car;
 using horace::Direction;
 using horace::Game;
@@ -222,4 +225,98 @@ TEST(GameTest, EachRunHasNewCourse) {
     walk(game, Direction::Down, kRowsDoorToBottom);  // лыжи целы — сразу вниз
     ASSERT_EQ(game.state(), GameState::Slope);
     EXPECT_NE(game.slope().gates()[0].leftX, firstGateX);
+}
+
+// ---------------------------------------------------------------------------
+// События (по ним app играет звуки)
+// ---------------------------------------------------------------------------
+
+namespace {
+
+using horace::GameEvent;
+
+bool has(const std::vector<GameEvent>& events, GameEvent e) {
+    return std::find(events.begin(), events.end(), e) != events.end();
+}
+
+// Крутит игру и собирает все события, пока не появится нужное (не дольше maxSeconds)
+std::vector<GameEvent> collectUntil(Game& game, GameEvent wanted, float maxSeconds = 60.f) {
+    std::vector<GameEvent> all;
+    for (float t = 0; t < maxSeconds && !has(all, wanted); t += 0.01f) {
+        game.update(0.01f);
+        for (GameEvent e : game.takeEvents()) all.push_back(e);
+    }
+    return all;
+}
+
+} // namespace
+
+TEST(GameEventsTest, StepMakesEvent) {
+    Game game = gameWithEmptyRoad();
+    game.moveHorace(Direction::Up);
+    EXPECT_EQ(game.takeEvents(), std::vector<GameEvent>{GameEvent::Step});
+}
+
+TEST(GameEventsTest, NoStepEventWhenBlockedByEdge) {
+    Game game = gameWithEmptyRoad();
+    game.moveHorace(Direction::Down);  // уже в самом низу — не сдвинется
+    EXPECT_TRUE(game.takeEvents().empty());
+}
+
+TEST(GameEventsTest, TakeEventsClearsList) {
+    Game game = gameWithEmptyRoad();
+    game.moveHorace(Direction::Up);
+    game.takeEvents();
+    EXPECT_TRUE(game.takeEvents().empty());
+}
+
+TEST(GameEventsTest, CrashMakesEvent) {
+    Game game = gameWithEmptyRoad();
+    putCarOnHorace(game);
+    game.update(0.f);
+    EXPECT_TRUE(has(game.takeEvents(), GameEvent::Crash));
+}
+
+TEST(GameEventsTest, RentingSkisMakesEvent) {
+    Game game = gameWithEmptyRoad();
+    walk(game, Direction::Up, kRowsBottomToShop);
+    EXPECT_TRUE(has(game.takeEvents(), GameEvent::SkisRented));
+}
+
+TEST(GameEventsTest, GatesMakeEvents) {
+    Game game = gameWithEmptyRoad();
+    goToSlope(game);
+    game.slope().startEmptyRun(10000);
+    game.slope().addGate(300, skierCenterX(game));        // по курсу
+    game.slope().addGate(600, skierCenterX(game) + 300);  // сбоку
+    game.takeEvents();
+    const auto events = collectUntil(game, GameEvent::GateMissed);
+    EXPECT_TRUE(has(events, GameEvent::GatePassed));
+    EXPECT_TRUE(has(events, GameEvent::GateMissed));
+}
+
+TEST(GameEventsTest, TreeAndBrokenSkisMakeEvents) {
+    Game game = gameWithEmptyRoad();
+    goToSlope(game);
+    game.slope().startEmptyRun(10000);
+    const float x = game.slope().skier().x;
+    for (int i = 0; i < horace::SlopeLevel::kMaxDamage; ++i) {
+        game.slope().addTree(x, 300 + i * 200.f);
+    }
+    const auto events = collectUntil(game, GameEvent::SkisBroken);
+    EXPECT_TRUE(has(events, GameEvent::TreeHit));
+    EXPECT_TRUE(has(events, GameEvent::SkisBroken));
+}
+
+TEST(GameEventsTest, FinishMakesEvent) {
+    Game game = gameWithEmptyRoad();
+    goToSlope(game);
+    game.slope().startEmptyRun(1000);
+    EXPECT_TRUE(has(collectUntil(game, GameEvent::Finished), GameEvent::Finished));
+}
+
+TEST(GameEventsTest, GameOverMakesEvent) {
+    Game game = gameWithEmptyRoad();
+    putCarOnHorace(game);
+    EXPECT_TRUE(has(collectUntil(game, GameEvent::GameOver), GameEvent::GameOver));
 }

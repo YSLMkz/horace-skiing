@@ -1,4 +1,5 @@
 #include "app/Renderer.hpp"
+#include "app/SoundPlayer.hpp"
 #include "core/Game.hpp"
 
 #include <SFML/Audio/Music.hpp>
@@ -54,6 +55,7 @@ int main() {
 
     sf::Music music;
     const bool hasMusic = startMusic(music);
+    horace::SoundPlayer sounds;  // звуки бипера (синтезируются при запуске)
 
     Game game;
     sf::Clock clock;
@@ -75,6 +77,9 @@ int main() {
                         if (music.getStatus() == sf::Music::Playing) music.pause();
                         else music.play();
                     }
+                    break;
+                case sf::Keyboard::N:  // звуки вкл/выкл (если бипер слишком «кислотный»)
+                    sounds.toggleMute();
                     break;
                 case sf::Keyboard::R:
                     if (game.state() == GameState::GameOver) {
@@ -102,7 +107,11 @@ int main() {
         const float dt = std::min(clock.restart().asSeconds(), 0.1f);
         game.update(dt);
 
-        // 3. Отрисовка
+        // 3. Звук: всё, что случилось за кадр, + сирена, пока едет скорая
+        sounds.handle(game.takeEvents());
+        sounds.setSiren(game.state() == GameState::Road && game.road().ambulance().isActive());
+
+        // 4. Отрисовка
         renderer.draw(window, game);
         window.display();
     }

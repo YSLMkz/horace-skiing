@@ -3,6 +3,8 @@
 #include "core/RoadLevel.hpp"
 #include "core/SlopeLevel.hpp"
 
+#include <vector>
+
 namespace horace {
 
 // Состояния игры (конечный автомат):
@@ -11,6 +13,21 @@ namespace horace {
 //     |                                                                       |
 //     +-------------------(деньги кончились)----> GameOver <------------------+
 enum class GameState { Road, Slope, GameOver };
+
+// Что случилось в игре — для звуков (и любых других эффектов).
+// Game только записывает события, а что с ними делать (какой звук играть),
+// решает app. Так логика по-прежнему не знает про SFML.
+enum class GameEvent {
+    Step,        // Хорас сделал шаг по дороге
+    Crash,       // сбила машина
+    SkisRented,  // взял лыжи в прокат
+    GatePassed,  // проехал ворота
+    GateMissed,  // пропустил ворота
+    TreeHit,     // врезался в дерево
+    SkisBroken,  // сломал лыжи
+    Finished,    // доехал до финиша
+    GameOver,    // деньги кончились
+};
 
 // Правила игры: деньги, очки, переходы между состояниями.
 // Ничего не знает про SFML, поэтому её легко тестировать.
@@ -43,6 +60,10 @@ public:
     int score() const { return score_; }
     int runsCompleted() const { return runsCompleted_; }
 
+    // Забрать накопившиеся события (список после этого очищается).
+    // Вызывается раз в кадр.
+    std::vector<GameEvent> takeEvents();
+
     RoadLevel& road() { return road_; }
     const RoadLevel& road() const { return road_; }
     SlopeLevel& slope() { return slope_; }
@@ -55,6 +76,7 @@ private:
     void payAmbulance();
     void rentSkis();
     void gameOver();
+    void emit(GameEvent event) { events_.push_back(event); }
 
     GameState state_ = GameState::Road;
     int money_ = kStartMoney;
@@ -63,6 +85,7 @@ private:
     unsigned nextCourseSeed_ = 1;
     RoadLevel road_;
     SlopeLevel slope_;
+    std::vector<GameEvent> events_;
 };
 
 } // namespace horace

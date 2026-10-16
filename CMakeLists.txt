@@ -47,6 +47,7 @@ add_library(horace_core
     src/core/Horace.cpp
     src/core/Car.cpp
     src/core/Ambulance.cpp
+    src/core/Beeper.cpp
     src/core/RoadLevel.cpp
     src/core/SlopeLevel.cpp
     src/core/Game.cpp
@@ -59,6 +60,7 @@ target_include_directories(horace_core PUBLIC src)
 add_executable(horace
     src/app/main.cpp
     src/app/Renderer.cpp
+    src/app/SoundPlayer.cpp
 )
 target_link_libraries(horace PRIVATE horace_core sfml-graphics sfml-audio sfml-window sfml-system)
 
@@ -89,6 +91,7 @@ add_executable(horace_tests
     tests/HoraceTest.cpp
     tests/CarTest.cpp
     tests/AmbulanceTest.cpp
+    tests/BeeperTest.cpp
     tests/RoadLevelTest.cpp
     tests/SlopeLevelTest.cpp
     tests/GameTest.cpp
