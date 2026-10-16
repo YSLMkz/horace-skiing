@@ -32,10 +32,11 @@ void Game::update(float dt) {
 
 void Game::updateRoad(float dt) {
     switch (road_.update(dt)) {
-    case RoadEvent::HitByCar:     payAmbulance(); break;
-    case RoadEvent::ReachedShop:  rentSkis();     break;
-    case RoadEvent::ReachedSlope: startSlope();   break;
-    case RoadEvent::None:         break;
+    case RoadEvent::HitByCar:      break;           // скорая уже едет; тут можно проиграть звук удара
+    case RoadEvent::AmbulanceLeft: payAmbulance(); break;  // скорая уехала — платим по счёту
+    case RoadEvent::ReachedShop:   rentSkis();     break;
+    case RoadEvent::ReachedSlope:  startSlope();   break;
+    case RoadEvent::None:          break;
     }
 }
 

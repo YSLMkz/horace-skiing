@@ -46,6 +46,7 @@ add_library(horace_core
     src/core/Rect.cpp
     src/core/Horace.cpp
     src/core/Car.cpp
+    src/core/Ambulance.cpp
     src/core/RoadLevel.cpp
     src/core/SlopeLevel.cpp
     src/core/Game.cpp
@@ -87,6 +88,7 @@ add_executable(horace_tests
     tests/RectTest.cpp
     tests/HoraceTest.cpp
     tests/CarTest.cpp
+    tests/AmbulanceTest.cpp
     tests/RoadLevelTest.cpp
     tests/SlopeLevelTest.cpp
     tests/GameTest.cpp

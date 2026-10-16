@@ -31,6 +31,16 @@ RoadEvent walk(RoadLevel& road, Direction dir, int steps) {
     return last;
 }
 
+// Ждёт, пока скорая уедет (не дольше 10 секунд). true — уехала.
+bool waitForAmbulance(RoadLevel& road) {
+    for (int i = 0; i < 1000; ++i) {
+        if (road.update(0.01f) == RoadEvent::AmbulanceLeft) {
+            return true;
+        }
+    }
+    return false;
+}
+
 const int kRowsBottomToShop = static_cast<int>(RoadLevel::kBottomY / RoadLevel::kCell);       // 14
 const int kRowsDoorToBottom = static_cast<int>((RoadLevel::kBottomY - RoadLevel::kShopDoorY) / RoadLevel::kCell); // 13
 
@@ -69,22 +79,79 @@ TEST(RoadLevelTest, WithSkisWalkingDownReachesSlope) {
     EXPECT_EQ(walk(road, Direction::Down, kRowsDoorToBottom), RoadEvent::ReachedSlope);
 }
 
-TEST(RoadLevelTest, HitWithoutSkisSendsHoraceToBottom) {
+TEST(RoadLevelTest, HitCallsAmbulance) {
     RoadLevel road = emptyRoad();
     walk(road, Direction::Up, 3);
     putCarOnHorace(road);
     EXPECT_EQ(road.update(0.f), RoadEvent::HitByCar);
-    EXPECT_FLOAT_EQ(road.horace().bounds().y, RoadLevel::kBottomY);
+    EXPECT_TRUE(road.ambulance().isActive());
+    EXPECT_TRUE(road.isHoraceKnockedDown());
 }
 
-TEST(RoadLevelTest, HitWithSkisSendsHoraceToShopDoorWithSkis) {
+TEST(RoadLevelTest, HoraceCannotMoveWhileAmbulanceComes) {
+    RoadLevel road = emptyRoad();
+    walk(road, Direction::Up, 3);
+    putCarOnHorace(road);
+    road.update(0.f);
+    const float y = road.horace().bounds().y;
+    road.moveHorace(Direction::Up);
+    EXPECT_FLOAT_EQ(road.horace().bounds().y, y);
+}
+
+TEST(RoadLevelTest, TrafficStopsWhileAmbulanceComes) {
+    RoadLevel road = emptyRoad();
+    road.addCar(Car(horace::Rect{0, 4 * RoadLevel::kCell, 80, 40}, 100.f));  // едет по полосе
+    walk(road, Direction::Up, 3);
+    putCarOnHorace(road);
+    road.update(0.f);
+    const float carX = road.cars()[0].bounds().x;
+    road.update(0.5f);
+    EXPECT_FLOAT_EQ(road.cars()[0].bounds().x, carX);
+}
+
+TEST(RoadLevelTest, AmbulanceTakesHoraceAway) {
+    RoadLevel road = emptyRoad();
+    walk(road, Direction::Up, 3);
+    putCarOnHorace(road);
+    road.update(0.f);
+    bool wasInside = false;
+    for (int i = 0; i < 1000 && road.ambulance().isActive(); ++i) {
+        road.update(0.01f);
+        wasInside = wasInside || road.isHoraceInAmbulance();
+    }
+    EXPECT_TRUE(wasInside);
+}
+
+TEST(RoadLevelTest, AfterAmbulanceWithoutSkisHoraceIsAtBottom) {
+    RoadLevel road = emptyRoad();
+    walk(road, Direction::Up, 3);
+    putCarOnHorace(road);
+    road.update(0.f);
+    ASSERT_TRUE(waitForAmbulance(road));
+    EXPECT_FLOAT_EQ(road.horace().bounds().y, RoadLevel::kBottomY);
+    EXPECT_FALSE(road.isHoraceKnockedDown());
+}
+
+TEST(RoadLevelTest, AfterAmbulanceWithSkisHoraceIsAtShopDoorWithSkis) {
     RoadLevel road = emptyRoad();
     road.giveSkis();
     walk(road, Direction::Down, 3);
     putCarOnHorace(road);
-    EXPECT_EQ(road.update(0.f), RoadEvent::HitByCar);
+    road.update(0.f);
+    ASSERT_TRUE(waitForAmbulance(road));
     EXPECT_FLOAT_EQ(road.horace().bounds().y, RoadLevel::kShopDoorY);
     EXPECT_TRUE(road.hasSkis());
+}
+
+TEST(RoadLevelTest, DefaultTrafficHasDifferentCarModels) {
+    RoadLevel road;
+    bool seen[RoadLevel::kCarModels] = {};
+    for (const Car& car : road.cars()) {
+        ASSERT_GE(car.model(), 0);
+        ASSERT_LT(car.model(), RoadLevel::kCarModels);
+        seen[car.model()] = true;
+    }
+    for (bool s : seen) EXPECT_TRUE(s);
 }
 
 TEST(RoadLevelTest, PlaceAtShopTakesSkisAway) {

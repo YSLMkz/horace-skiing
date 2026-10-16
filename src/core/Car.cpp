@@ -2,7 +2,7 @@
 
 namespace horace {
 
-Car::Car(Rect bounds, float speed) : bounds_(bounds), speed_(speed) {}
+Car::Car(Rect bounds, float speed, int model) : bounds_(bounds), speed_(speed), model_(model) {}
 
 void Car::update(float dt, float fieldWidth) {
     bounds_.x += speed_ * dt;

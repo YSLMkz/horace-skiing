@@ -1,5 +1,6 @@
 #pragma once
 
+#include "core/Ambulance.hpp"
 #include "core/Car.hpp"
 #include "core/Horace.hpp"
 #include "core/Rect.hpp"
@@ -12,7 +13,8 @@ namespace horace {
 // состояние игры) принимает Game — дорога только сообщает о событии.
 enum class RoadEvent {
     None,
-    HitByCar,      // сбила машина (Хораса уже вернули на исходную сторону)
+    HitByCar,       // сбила машина — едет скорая, движение замерло
+    AmbulanceLeft,  // скорая уехала, Хораса вернули на исходную сторону — пора платить
     ReachedShop,   // зашёл в лавку без лыж — пора покупать
     ReachedSlope,  // перешёл дорогу обратно с лыжами — пора на склон
 };
@@ -28,6 +30,7 @@ public:
     static constexpr float kWidth  = 800.f;
     static constexpr float kHeight = 600.f;
     static constexpr float kCell   = 40.f;
+    static constexpr int   kCarModels = 4;  // сколько разных моделей машин (и текстур)
 
     RoadLevel();
 
@@ -35,6 +38,7 @@ public:
     void placeAtShop();      // после заезда: у двери лавки, без лыж
     void giveSkis();         // лыжи получены — теперь надо идти вниз на склон
 
+    // Пока едет скорая, Хорас не слушается
     void moveHorace(Direction dir);
     RoadEvent update(float dt);
 
@@ -42,6 +46,11 @@ public:
     const Horace& horace() const { return horace_; }
     const std::vector<Car>& cars() const { return cars_; }
     const Rect& shop() const { return shop_; }
+    const Ambulance& ambulance() const { return ambulance_; }
+    // Хорас лежит на дороге и ждёт скорую
+    bool isHoraceKnockedDown() const;
+    // Хорас уже в скорой (его не надо рисовать)
+    bool isHoraceInAmbulance() const;
 
     // Для тестов: убрать машины / поставить свою
     void clearCars() { cars_.clear(); }
@@ -58,6 +67,7 @@ private:
     Horace horace_;
     std::vector<Car> cars_;
     Rect shop_;
+    Ambulance ambulance_;
     bool hasSkis_ = false;
 };
 
