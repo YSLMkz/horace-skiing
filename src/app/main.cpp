@@ -48,6 +48,9 @@ int main() {
     if (!renderer.loadFont(std::string(HORACE_ASSETS_DIR) + "/fonts/DejaVuSansMono.ttf")) {
         std::cerr << "Font not found, text will not be shown\n";
     }
+    if (!renderer.loadTextures(std::string(HORACE_ASSETS_DIR) + "/textures")) {
+        std::cerr << "Some textures not found, drawing rectangles instead\n";
+    }
 
     sf::Music music;
     const bool hasMusic = startMusic(music);

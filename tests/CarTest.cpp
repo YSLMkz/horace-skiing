@@ -22,3 +22,13 @@ TEST(CarTest, WrapsFromLeftToRight) {
     car.update(1.f, 800);  // правый край < 0 — уехала
     EXPECT_FLOAT_EQ(car.bounds().x, 800);
 }
+
+TEST(CarTest, ModelIsZeroByDefault) {
+    Car car(Rect{0, 0, 80, 40}, 50.f);
+    EXPECT_EQ(car.model(), 0);
+}
+
+TEST(CarTest, KeepsGivenModel) {
+    Car car(Rect{0, 0, 80, 40}, 50.f, 3);
+    EXPECT_EQ(car.model(), 3);
+}
