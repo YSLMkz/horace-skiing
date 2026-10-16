@@ -15,21 +15,18 @@ RoadLevel::RoadLevel()
     for (int lane = 0; lane < 4; ++lane) {
         for (int i = 0; i < 3; ++i) {
             const float x = i * (kWidth / 3.f) + lane * kCell;
-            const int model = (lane + i) % kCarModels;  // чтобы в полосе были разные машины
-            cars_.emplace_back(Rect{x, laneRows[lane] * kCell, carW, kCell}, laneSpeed[lane], model);
+            cars_.emplace_back(Rect{x, laneRows[lane] * kCell, carW, kCell}, laneSpeed[lane]);
         }
     }
     startFromBottom();
 }
 
 void RoadLevel::startFromBottom() {
-    ambulance_ = Ambulance{};
     hasSkis_ = false;
     horace_.setPosition(kStartX, kBottomY);
 }
 
 void RoadLevel::placeAtShop() {
-    ambulance_ = Ambulance{};
     hasSkis_ = false;
     horace_.setPosition(kStartX, kShopDoorY);
 }
@@ -40,38 +37,17 @@ void RoadLevel::giveSkis() {
 }
 
 void RoadLevel::moveHorace(Direction dir) {
-    if (ambulance_.isActive()) {
-        return;
-    }
     horace_.move(dir, kWidth, kHeight);
 }
 
-bool RoadLevel::isHoraceKnockedDown() const {
-    return ambulance_.phase() == AmbulancePhase::Arriving ||
-           ambulance_.phase() == AmbulancePhase::Loading;
-}
-
-bool RoadLevel::isHoraceInAmbulance() const {
-    return ambulance_.phase() == AmbulancePhase::Leaving;
-}
-
 RoadEvent RoadLevel::update(float dt) {
-    // Пока едет скорая, всё остальное на дороге стоит
-    if (ambulance_.isActive()) {
-        if (ambulance_.update(dt)) {
-            respawnAfterHit();
-            return RoadEvent::AmbulanceLeft;
-        }
-        return RoadEvent::None;
-    }
-
     for (Car& car : cars_) {
         car.update(dt, kWidth);
     }
 
     for (const Car& car : cars_) {
         if (car.bounds().intersects(horace_.bounds())) {
-            ambulance_.call(horace_.bounds(), kWidth);
+            respawnAfterHit();
             return RoadEvent::HitByCar;
         }
     }
@@ -86,7 +62,7 @@ RoadEvent RoadLevel::update(float dt) {
 }
 
 void RoadLevel::respawnAfterHit() {
-    // Скорая привозит Хораса на ту сторону, откуда он шёл:
+    // Скорая возвращает Хораса на ту сторону, откуда он шёл:
     // без лыж — вниз на старт, с лыжами — к лавке (лыжи остаются при нём).
     if (hasSkis_) {
         horace_.setPosition(kStartX, kShopDoorY);

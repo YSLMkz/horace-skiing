@@ -27,22 +27,6 @@ void walk(Game& game, Direction dir, int steps) {
     }
 }
 
-// Крутит игру мелкими шагами, пока не изменятся деньги или не кончится игра
-void runUntilMoneyChanges(Game& game) {
-    const int before = game.money();
-    for (int i = 0; i < 1000 && game.money() == before && game.state() != GameState::GameOver; ++i) {
-        game.update(0.01f);
-    }
-}
-
-// Машина стоит на старте — Хораса сбивают раз за разом, пока не кончатся деньги
-void loseAllMoney(Game& game) {
-    putCarOnHorace(game);
-    for (int i = 0; i < 10000 && game.state() != GameState::GameOver; ++i) {
-        game.update(0.01f);
-    }
-}
-
 const int kRowsBottomToShop = 14;
 const int kRowsDoorToBottom = 13;
 
@@ -61,19 +45,20 @@ TEST(GameTest, StartsOnRoadWithStartMoney) {
     EXPECT_EQ(game.score(), 0);
 }
 
-TEST(GameTest, AmbulanceIsPaidOnlyAfterItLeaves) {
+TEST(GameTest, HitByCarCostsAmbulanceFee) {
     Game game = gameWithEmptyRoad();
     putCarOnHorace(game);
-    game.update(0.f);                       // сбили — скорая только выехала
-    EXPECT_EQ(game.money(), Game::kStartMoney);
-    runUntilMoneyChanges(game);             // скорая уехала — заплатили
+    game.update(0.f);
     EXPECT_EQ(game.money(), Game::kStartMoney - Game::kAmbulanceFee);
     EXPECT_EQ(game.state(), GameState::Road);
 }
 
 TEST(GameTest, GameOverWhenMoneyRunsOut) {
     Game game = gameWithEmptyRoad();
-    loseAllMoney(game);
+    putCarOnHorace(game);  // машина стоит на старте — сбивает каждый кадр
+    for (int i = 0; i < Game::kStartMoney / Game::kAmbulanceFee; ++i) {
+        game.update(0.f);
+    }
     EXPECT_EQ(game.state(), GameState::GameOver);
     EXPECT_EQ(game.money(), 0);
 }
@@ -138,7 +123,10 @@ TEST(GameTest, FinishRunIgnoredWhenNotOnSlope) {
 
 TEST(GameTest, CannotMoveAfterGameOver) {
     Game game = gameWithEmptyRoad();
-    loseAllMoney(game);
+    putCarOnHorace(game);
+    for (int i = 0; i < Game::kStartMoney / Game::kAmbulanceFee; ++i) {
+        game.update(0.f);
+    }
     const float y = game.road().horace().bounds().y;
     game.moveHorace(Direction::Up);
     EXPECT_FLOAT_EQ(game.road().horace().bounds().y, y);

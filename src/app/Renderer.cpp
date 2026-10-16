@@ -2,10 +2,7 @@
 
 #include <SFML/Graphics/ConvexShape.hpp>
 #include <SFML/Graphics/RectangleShape.hpp>
-#include <SFML/Graphics/Sprite.hpp>
 #include <SFML/Graphics/Text.hpp>
-
-#include <cmath>
 
 namespace horace {
 
@@ -29,52 +26,11 @@ void drawRect(sf::RenderTarget& target, const Rect& r, sf::Color color) {
     target.draw(shape);
 }
 
-// Рисует текстуру, растянутую на прямоугольник r.
-// flipped — отразить по горизонтали (машина едет влево, а нарисована мордой вправо).
-void drawSprite(sf::RenderTarget& target, const sf::Texture& texture, const Rect& r, bool flipped) {
-    sf::Sprite sprite(texture);
-    const sf::Vector2u size = texture.getSize();
-    const float sx = r.width / static_cast<float>(size.x);
-    const float sy = r.height / static_cast<float>(size.y);
-    if (flipped) {
-        sprite.setScale(-sx, sy);         // отрицательный масштаб — зеркально
-        sprite.setPosition(r.x + r.width, r.y);
-    } else {
-        sprite.setScale(sx, sy);
-        sprite.setPosition(r.x, r.y);
-    }
-    target.draw(sprite);
-}
-
 } // namespace
 
 bool Renderer::loadFont(const std::string& path) {
     hasFont_ = font_.loadFromFile(path);
     return hasFont_;
-}
-
-bool Renderer::loadTextures(const std::string& dir) {
-    // Порядок важен: номер файла = номер модели машины (Car::model())
-    const char* carFiles[RoadLevel::kCarModels] = {
-        "car_red.png", "car_yellow.png", "car_blue.png", "van_green.png"};
-
-    carTextures_.clear();
-    bool ok = true;
-    for (const char* file : carFiles) {
-        sf::Texture texture;
-        if (!texture.loadFromFile(dir + "/" + file)) {
-            ok = false;
-            break;
-        }
-        carTextures_.push_back(texture);
-    }
-    if (!ok) {
-        carTextures_.clear();  // не хватает хоть одной — рисуем все машины прямоугольниками
-    }
-
-    hasAmbulanceTextures_ = ambulanceFrames_[0].loadFromFile(dir + "/ambulance_1.png") &&
-                            ambulanceFrames_[1].loadFromFile(dir + "/ambulance_2.png");
-    return ok && hasAmbulanceTextures_;
 }
 
 void Renderer::draw(sf::RenderTarget& target, const Game& game) const {
@@ -117,76 +73,19 @@ void Renderer::drawRoad(sf::RenderTarget& target, const RoadLevel& road) const {
     drawText(target, "ПРОКАТ $10", shop.x + shop.width + 10, shop.y + 8, 18);
 
     for (const Car& car : road.cars()) {
-        drawCar(target, car);
-    }
-
-    drawHorace(target, road);
-    if (road.ambulance().isActive()) {
-        drawAmbulance(target, road.ambulance());
-    }
-
-    const char* hint = road.hasSkis() ? "Лыжи есть! Вниз, к склону" : "Дойди до лавки за лыжами";
-    if (road.ambulance().isActive()) {
-        hint = "Ой! Едет скорая — это будет стоить $10";
-    }
-    drawText(target, hint, 10, RoadLevel::kHeight - 30, 18);
-}
-
-void Renderer::drawCar(sf::RenderTarget& target, const Car& car) const {
-    if (carTextures_.empty()) {
         drawRect(target, car.bounds(), kCar);
-        return;
     }
-    const sf::Texture& texture = carTextures_[static_cast<size_t>(car.model()) % carTextures_.size()];
-    drawSprite(target, texture, car.bounds(), car.speed() < 0.f);
-}
 
-void Renderer::drawHorace(sf::RenderTarget& target, const RoadLevel& road) const {
-    if (road.isHoraceInAmbulance()) {
-        return;  // уже внутри скорой
-    }
     const Rect& hb = road.horace().bounds();
-
-    if (road.isHoraceKnockedDown()) {
-        // лежит на дороге: плоский прямоугольник внизу клетки
-        drawRect(target, Rect{hb.x - 4, hb.y + hb.height - 14, hb.width + 8, 14}, kHorace);
-        if (road.hasSkis()) {
-            drawRect(target, Rect{hb.x - 10, hb.y + hb.height - 4, hb.width + 20, 4}, kSkis);
-        }
-        // «звёздочки» над головой мигают
-        const float t = road.ambulance().time();
-        const sf::Color star(255, 220, 40);
-        for (int i = 0; i < 3; ++i) {
-            const float phase = t * 6.f + static_cast<float>(i) * 2.1f;
-            if (std::sin(phase) > 0.f) {
-                drawRect(target, Rect{hb.x + 4 + i * 12.f, hb.y + 8 + (i % 2) * 6.f, 5, 5}, star);
-            }
-        }
-        return;
-    }
-
     drawRect(target, hb, kHorace);
     if (road.hasSkis()) {
         // лыжи на плече — две синие полоски
         drawRect(target, Rect{hb.x - 6, hb.y + 8, hb.width + 12, 5}, kSkis);
         drawRect(target, Rect{hb.x - 6, hb.y + 16, hb.width + 12, 5}, kSkis);
     }
-}
 
-void Renderer::drawAmbulance(sf::RenderTarget& target, const Ambulance& ambulance) const {
-    const Rect& r = ambulance.bounds();
-    // Мигалка: каждые 0.15 секунды меняем кадр — это и есть анимация
-    const int frame = static_cast<int>(ambulance.time() / 0.15f) % 2;
-
-    if (hasAmbulanceTextures_) {
-        drawSprite(target, ambulanceFrames_[frame], r, false);
-        return;
-    }
-    // запасной вариант без текстур
-    drawRect(target, r, sf::Color(235, 235, 235));
-    drawRect(target, Rect{r.x + 28, r.y + 8, 8, 24}, kFlag);
-    drawRect(target, Rect{r.x + 20, r.y + 16, 24, 8}, kFlag);
-    drawRect(target, Rect{r.x + 36, r.y - 4, 10, 4}, frame ? sf::Color(25, 40, 90) : sf::Color(80, 160, 255));
+    const char* hint = road.hasSkis() ? "Лыжи есть! Вниз, к склону" : "Дойди до лавки за лыжами";
+    drawText(target, hint, 10, RoadLevel::kHeight - 30, 18);
 }
 
 void Renderer::drawSlope(sf::RenderTarget& target, const SlopeLevel& slope) const {
