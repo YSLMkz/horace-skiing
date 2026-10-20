@@ -16,6 +16,7 @@ beeper::Sound soundFor(GameEvent event) {
     case GameEvent::SkisBroken: return beeper::Sound::SkisBroken;
     case GameEvent::Finished:   return beeper::Sound::Finished;
     case GameEvent::GameOver:   return beeper::Sound::GameOver;
+    case GameEvent::BonusMoney: return beeper::Sound::BonusMoney;
     }
     return beeper::Sound::Step;
 }

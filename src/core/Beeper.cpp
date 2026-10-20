@@ -167,6 +167,15 @@ Samples makeSound(Sound sound) {
         break;
     }
 
+    case Sound::BonusMoney:
+        // «монетка» три раза подряд, каждый раз выше, и искрящийся аккорд
+        for (float k : {1.f, 1.5f, 2.f}) {
+            append(s, square(988 * k, 988 * k, 0.05f));
+            append(s, square(1319 * k, 1319 * k, 0.12f));
+        }
+        append(s, chord({C7, E6 * 2, G6 * 2}, 0.3f, 50));
+        break;
+
     case Sound::Count:
         break;
     }

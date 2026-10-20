@@ -78,6 +78,9 @@ int main() {
                         else music.play();
                     }
                     break;
+                case sf::Keyboard::P:  // пауза (в оригинале была S)
+                    game.togglePause();
+                    break;
                 case sf::Keyboard::N:  // звуки вкл/выкл (если бипер слишком «кислотный»)
                     sounds.toggleMute();
                     break;
@@ -109,7 +112,8 @@ int main() {
 
         // 3. Звук: всё, что случилось за кадр, + сирена, пока едет скорая
         sounds.handle(game.takeEvents());
-        sounds.setSiren(game.state() == GameState::Road && game.road().ambulance().isActive());
+        sounds.setSiren(game.state() == GameState::Road && !game.isPaused() &&
+                        game.road().ambulance().isActive());
 
         // 4. Отрисовка
         renderer.draw(window, game);

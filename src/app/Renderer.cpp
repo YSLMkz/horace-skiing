@@ -21,6 +21,8 @@ const sf::Color kHorace(90, 200, 90);
 const sf::Color kSkis(30, 60, 200);
 const sf::Color kText(20, 20, 40);
 const sf::Color kFlag(220, 40, 40);
+const sf::Color kFlagBlue(40, 80, 220);
+const sf::Color kCenterLine(240, 200, 40);
 
 void drawRect(sf::RenderTarget& target, const Rect& r, sf::Color color) {
     sf::RectangleShape shape({r.width, r.height});
@@ -97,18 +99,27 @@ void Renderer::draw(sf::RenderTarget& target, const Game& game) const {
         break;
     }
     drawHud(target, game);
+
+    if (game.isPaused()) {
+        drawRect(target, Rect{0, h / 2 - 50, w, 100}, sf::Color(255, 255, 255, 220));
+        drawText(target, "ПАУЗА", w / 2, h / 2 - 40, 40, true);
+        drawText(target, "P — продолжить", w / 2, h / 2 + 12, 20, true);
+    }
 }
 
 void Renderer::drawRoad(sf::RenderTarget& target, const RoadLevel& road) const {
     const float cell = RoadLevel::kCell;
 
-    // асфальт (строки 4..10) и пунктир между полосами
+    // асфальт (строки 4..10): пунктир между полосами одного направления,
+    // двойная сплошная посередине (строка 7) — между встречными
     drawRect(target, Rect{0, 4 * cell, RoadLevel::kWidth, 7 * cell}, kAsphalt);
-    for (float row : {5.f, 7.f, 9.f}) {
+    for (float row : {5.f, 9.f}) {
         for (float x = 0; x < RoadLevel::kWidth; x += 2 * cell) {
             drawRect(target, Rect{x, row * cell + cell / 2 - 2, cell, 4}, kLaneMark);
         }
     }
+    drawRect(target, Rect{0, 7 * cell + cell / 2 - 6, RoadLevel::kWidth, 3}, kCenterLine);
+    drawRect(target, Rect{0, 7 * cell + cell / 2 + 3, RoadLevel::kWidth, 3}, kCenterLine);
 
     // лавка проката с дверью
     const Rect& shop = road.shop();
@@ -206,11 +217,14 @@ void Renderer::drawSlope(sf::RenderTarget& target, const SlopeLevel& slope) cons
         drawText(target, "ФИНИШ", SlopeLevel::kWidth / 2, y + 26, 28, true);
     }
 
-    // ворота: два флажка; пройденные — зелёные, пропущенные — серые
-    for (const Gate& gate : slope.gates()) {
+    // ворота: два флажка, как в оригинале — пары по очереди красные и синие;
+    // пропущенные ворота сереют
+    const auto& gates = slope.gates();
+    for (size_t i = 0; i < gates.size(); ++i) {
+        const Gate& gate = gates[i];
         if (!visible(gate.y)) continue;
-        sf::Color flag = kFlag;
-        if (gate.resolved) flag = gate.passed ? kHorace : sf::Color(160, 160, 160);
+        sf::Color flag = i % 2 == 0 ? kFlag : kFlagBlue;
+        if (gate.resolved && !gate.passed) flag = sf::Color(160, 160, 160);
         for (float x : {gate.leftX - 4, gate.rightX - 4}) {
             drawRect(target, toScreen(Rect{x + 3, gate.y - 30, 2, 30}), sf::Color(60, 60, 60));  // древко
             drawRect(target, toScreen(Rect{x + 5, gate.y - 30, 14, 10}), flag);                 // флажок
@@ -247,7 +261,9 @@ void Renderer::drawSlope(sf::RenderTarget& target, const SlopeLevel& slope) cons
 
 void Renderer::drawHud(sf::RenderTarget& target, const Game& game) const {
     drawText(target, "$" + std::to_string(game.money()), 10, 8, 22);
-    drawText(target, "Очки: " + std::to_string(game.score()), 10, 36, 18);
+    drawText(target, "Очки: " + std::to_string(game.score()) +
+                         "  (+$10 при " + std::to_string(game.nextCashAt()) + ")",
+             10, 36, 18);
 }
 
 void Renderer::drawText(sf::RenderTarget& target, const std::string& utf8, float x, float y,

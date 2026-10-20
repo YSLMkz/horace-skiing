@@ -161,3 +161,98 @@ TEST(RoadLevelTest, PlaceAtShopTakesSkisAway) {
     EXPECT_FALSE(road.hasSkis());
     EXPECT_FLOAT_EQ(road.horace().bounds().y, RoadLevel::kShopDoorY);
 }
+
+// ---------------------------------------------------------------------------
+// Трафик как в оригинале: перестроения и рост числа машин
+// ---------------------------------------------------------------------------
+
+TEST(RoadLevelTest, LanesGoInPairsOfSameDirection) {
+    for (int lane = 0; lane < RoadLevel::kLaneCount; ++lane) {
+        const int partner = lane ^ 1;
+        EXPECT_EQ(RoadLevel::laneSpeed(lane) > 0, RoadLevel::laneSpeed(partner) > 0);
+    }
+    EXPECT_GT(RoadLevel::laneSpeed(0), 0);  // верхние — вправо
+    EXPECT_LT(RoadLevel::laneSpeed(3), 0);  // нижние — влево
+}
+
+TEST(RoadLevelTest, CarChangesToNeighbourLaneOfSameDirection) {
+    RoadLevel road = emptyRoad();
+    road.addCar(Car(horace::Rect{300, RoadLevel::laneY(0), 80, 40}, RoadLevel::laneSpeed(0)));
+    ASSERT_TRUE(road.tryChangeLane(0));
+    EXPECT_FLOAT_EQ(road.cars()[0].laneY(), RoadLevel::laneY(1));
+    for (int i = 0; i < 100 && road.cars()[0].isChangingLane(); ++i) road.update(0.05f);
+    EXPECT_FLOAT_EQ(road.cars()[0].bounds().y, RoadLevel::laneY(1));      // доехала
+    EXPECT_FLOAT_EQ(road.cars()[0].speed(), RoadLevel::laneSpeed(1));     // и едет в темпе полосы
+}
+
+TEST(RoadLevelTest, NoLaneChangeIntoOccupiedSpot) {
+    RoadLevel road = emptyRoad();
+    road.addCar(Car(horace::Rect{300, RoadLevel::laneY(0), 80, 40}, RoadLevel::laneSpeed(0)));
+    road.addCar(Car(horace::Rect{340, RoadLevel::laneY(1), 80, 40}, RoadLevel::laneSpeed(1)));  // рядом
+    EXPECT_FALSE(road.tryChangeLane(0));
+}
+
+TEST(RoadLevelTest, NoLaneChangeWhileAlreadyChanging) {
+    RoadLevel road = emptyRoad();
+    road.addCar(Car(horace::Rect{300, RoadLevel::laneY(2), 80, 40}, RoadLevel::laneSpeed(2)));
+    ASSERT_TRUE(road.tryChangeLane(0));
+    EXPECT_FALSE(road.tryChangeLane(0));
+}
+
+TEST(RoadLevelTest, SpawnedCarEntersFromCorrectSide) {
+    RoadLevel road = emptyRoad();
+    ASSERT_TRUE(road.trySpawnCar());
+    const Car& car = road.cars().back();
+    if (car.speed() > 0) {
+        EXPECT_LT(car.bounds().x, 0.f);              // едет вправо — появляется слева
+    } else {
+        EXPECT_GE(car.bounds().x, RoadLevel::kWidth);  // едет влево — справа
+    }
+}
+
+TEST(RoadLevelTest, LanesNeverGetMoreThanMaxCars) {
+    RoadLevel road = emptyRoad();
+    for (int i = 0; i < 100; ++i) {
+        road.trySpawnCar();
+        road.update(0.5f);  // разъезжаются — освобождают въезд
+    }
+    for (int lane = 0; lane < RoadLevel::kLaneCount; ++lane) {
+        int count = 0;
+        for (const Car& car : road.cars()) {
+            if (car.laneY() == RoadLevel::laneY(lane)) ++count;
+        }
+        EXPECT_LE(count, RoadLevel::kMaxCarsPerLane);
+    }
+}
+
+TEST(RoadLevelTest, LingeringOnRoadBringsMoreCars) {
+    RoadLevel road;  // обычный трафик; Хорас стоит внизу на тротуаре
+    const size_t before = road.cars().size();
+    for (int i = 0; i < 300; ++i) road.update(0.1f);  // 30 секунд
+    EXPECT_GT(road.cars().size(), before);
+    EXPECT_GT(road.crossingTime(), 29.f);
+}
+
+TEST(RoadLevelTest, NewCrossingResetsTraffic) {
+    RoadLevel road;
+    const size_t base = road.cars().size();
+    for (int i = 0; i < 300; ++i) road.update(0.1f);
+    road.placeAtShop();  // вернулись со склона
+    EXPECT_EQ(road.cars().size(), base);
+    EXPECT_FLOAT_EQ(road.crossingTime(), 0.f);
+}
+
+// Пять минут трафика с новыми машинами и перестроениями — машины ни разу не наезжают друг на друга
+TEST(RoadLevelTest, TrafficNeverOverlaps) {
+    RoadLevel road;  // Хорас на тротуаре, его не сбивают
+    for (int frame = 0; frame < 5 * 60 * 60; ++frame) {
+        road.update(1.f / 60);
+        const auto& cars = road.cars();
+        for (size_t i = 0; i < cars.size(); ++i) {
+            for (size_t j = i + 1; j < cars.size(); ++j) {
+                ASSERT_FALSE(cars[i].bounds().intersects(cars[j].bounds()))
+                    << "frame " << frame << ": cars " << i << " and " << j;
+            }
+        }
+    }
+}

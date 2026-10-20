@@ -11,7 +11,7 @@ std::vector<GameEvent> Game::takeEvents() {
 }
 
 void Game::moveHorace(Direction dir) {
-    if (state_ == GameState::Road && road_.moveHorace(dir)) {
+    if (state_ == GameState::Road && !paused_ && road_.moveHorace(dir)) {
         emit(GameEvent::Step);
     }
 }
@@ -28,7 +28,30 @@ void Game::setTuck(bool tuck) {
     }
 }
 
+void Game::togglePause() {
+    if (state_ != GameState::GameOver) {
+        paused_ = !paused_;
+    }
+}
+
+void Game::addScore(int points) {
+    score_ += points;
+    if (score_ < 0) {
+        score_ = 0;
+    }
+    // Порог только растёт: если очки отняли штрафом и снова набрали,
+    // за ту же тысячу второй раз не платим
+    while (score_ >= nextCashAt_) {
+        money_ += kCashBonus;
+        nextCashAt_ += kPointsForCash;
+        emit(GameEvent::BonusMoney);
+    }
+}
+
 void Game::update(float dt) {
+    if (paused_) {
+        return;
+    }
     switch (state_) {
     case GameState::Road:     updateRoad(dt);  break;
     case GameState::Slope:    updateSlope(dt); break;
@@ -50,18 +73,19 @@ void Game::updateSlope(float dt) {
     for (SlopeEvent event : slope_.update(dt)) {
         switch (event) {
         case SlopeEvent::PassedGate:
-            score_ += kGatePoints;
             emit(GameEvent::GatePassed);
+            addScore(kGatePoints);
             break;
         case SlopeEvent::MissedGate:
-            emit(GameEvent::GateMissed);  // TODO: по правилам оригинала ещё и штраф очками
+            emit(GameEvent::GateMissed);  // в оригинале — предупреждающий сигнал и штраф
+            addScore(-kGatePenalty);
             break;
         case SlopeEvent::HitTree:
             emit(GameEvent::TreeHit);     // урон лыжам SlopeLevel считает сам
             break;
         case SlopeEvent::Finished:
-            score_ += kFinishBonus;
             emit(GameEvent::Finished);
+            addScore(kFinishBonus);
             finishRun(false);
             break;
         case SlopeEvent::SkisBroken:
@@ -109,6 +133,7 @@ void Game::rentSkis() {
 
 void Game::gameOver() {
     money_ = 0;
+    paused_ = false;
     state_ = GameState::GameOver;
     emit(GameEvent::GameOver);
 }

@@ -53,6 +53,7 @@ enum class Sound {
     SkisBroken,  // сломал лыжи
     Finished,    // финиш — фанфары
     GameOver,    // конец игры
+    BonusMoney,  // +$10 за 1000 очков — «монетка»
     Count        // сколько всего звуков (не звук)
 };
 

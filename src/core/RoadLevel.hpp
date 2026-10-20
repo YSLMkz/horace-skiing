@@ -5,6 +5,7 @@
 #include "core/Horace.hpp"
 #include "core/Rect.hpp"
 
+#include <random>
 #include <vector>
 
 namespace horace {
@@ -23,14 +24,29 @@ enum class RoadEvent {
 //
 // Поле — сетка 20 x 15 клеток по 40 px:
 //   строка 0      — лавка (по центру)
-//   строки 4..10  — дорога с полосами
+//   строки 4..10  — дорога: полосы 4 и 6 едут вправо, 8 и 10 — влево
 //   строка 14     — старт, отсюда же вход на склон
+//
+// Как в оригинале: машины иногда перестраиваются в соседнюю полосу
+// (того же направления), а чем дольше Хорас переходит дорогу,
+// тем больше становится машин.
 class RoadLevel {
 public:
     static constexpr float kWidth  = 800.f;
     static constexpr float kHeight = 600.f;
     static constexpr float kCell   = 40.f;
     static constexpr int   kCarModels = 4;  // сколько разных моделей машин (и текстур)
+
+    static constexpr int   kLaneCount       = 4;
+    static constexpr int   kBaseCarsPerLane = 3;     // столько машин в полосе в начале перехода
+    static constexpr int   kMaxCarsPerLane  = 5;     // больше не добавляем
+    static constexpr float kSpawnInterval   = 6.f;   // раз в столько секунд — новая машина
+    static constexpr float kCarWidth        = 2 * kCell;
+    static constexpr float kCarGap          = kCell; // минимальный зазор между машинами в полосе
+
+    static float laneY(int lane);      // высота полосы
+    static float laneSpeed(int lane);  // скорость машин в полосе (знак — направление)
+    static int laneIndex(float y);     // номер полосы по высоте или -1
 
     RoadLevel();
 
@@ -53,6 +69,15 @@ public:
     // Хорас уже в скорой (его не надо рисовать)
     bool isHoraceInAmbulance() const;
 
+    // Сколько секунд Хорас уже переходит дорогу (от этого растёт трафик)
+    float crossingTime() const { return crossingTime_; }
+
+    // Добавить машину на въезде в какую-нибудь полосу, если там есть место
+    bool trySpawnCar();
+    // Перестроить машину номер index в соседнюю полосу того же направления,
+    // если там свободно. Возвращает true, если перестроение началось.
+    bool tryChangeLane(size_t index);
+
     // Для тестов: убрать машины / поставить свою
     void clearCars() { cars_.clear(); }
     void addCar(const Car& car) { cars_.push_back(car); }
@@ -64,12 +89,23 @@ public:
 
 private:
     void respawnAfterHit();
+    void resetTraffic();        // вернуть начальные машины
+    void startNewCrossing();    // обнулить «сколько уже идём»
+    void updateTraffic(float dt);
+    int carsInLane(int lane) const;
+    bool laneIsFreeNear(int lane, float x, const Car* except, float extraGap = 0.f) const;
 
     Horace horace_;
     std::vector<Car> cars_;
     Rect shop_;
     Ambulance ambulance_;
     bool hasSkis_ = false;
+
+    float crossingTime_ = 0.f;
+    float spawnTimer_ = kSpawnInterval;
+    float laneChangeTimer_ = 2.f;
+    int spawned_ = 0;
+    std::mt19937 rng_{2024};  // фиксированный seed — поведение машин повторяемо
 };
 
 } // namespace horace

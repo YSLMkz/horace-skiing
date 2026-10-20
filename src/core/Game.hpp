@@ -27,6 +27,7 @@ enum class GameEvent {
     SkisBroken,  // сломал лыжи
     Finished,    // доехал до финиша
     GameOver,    // деньги кончились
+    BonusMoney,  // набрал очередную 1000 очков — +$10
 };
 
 // Правила игры: деньги, очки, переходы между состояниями.
@@ -37,9 +38,12 @@ public:
     static constexpr int kStartMoney   = 40;
     static constexpr int kSkiPrice     = 10;
     static constexpr int kAmbulanceFee = 10;
-    // Очки — TODO: сверить с оригиналом
-    static constexpr int kGatePoints   = 10;   // за каждые ворота
-    static constexpr int kFinishBonus  = 100;  // за финиш
+    static constexpr int kFinishBonus  = 100;  // за финиш (как в оригинале)
+    static constexpr int kPointsForCash = 1000; // каждые 1000 очков…
+    static constexpr int kCashBonus    = 10;   // …дают $10 (как в оригинале)
+    // Очки за ворота — в оригинале точное число не указано, подобрано на глаз
+    static constexpr int kGatePoints   = 10;   // за пройденные ворота
+    static constexpr int kGatePenalty  = 10;   // штраф за пропущенные
 
     Game();
 
@@ -51,6 +55,10 @@ public:
 
     void update(float dt);
 
+    // Пауза (в оригинале — клавиша S). Пока пауза, update() ничего не делает.
+    void togglePause();
+    bool isPaused() const { return paused_; }
+
     // Заезд окончен. skisBroken — сломал ли Хорас лыжи.
     // Целые лыжи остаются, сломанные придётся брать в прокат снова.
     void finishRun(bool skisBroken);
@@ -59,6 +67,8 @@ public:
     int money() const { return money_; }
     int score() const { return score_; }
     int runsCompleted() const { return runsCompleted_; }
+    // Сколько очков нужно набрать для следующих $10
+    int nextCashAt() const { return nextCashAt_; }
 
     // Забрать накопившиеся события (список после этого очищается).
     // Вызывается раз в кадр.
@@ -76,12 +86,15 @@ private:
     void payAmbulance();
     void rentSkis();
     void gameOver();
+    void addScore(int points);  // очки не уходят ниже нуля; каждая 1000 — +$10
     void emit(GameEvent event) { events_.push_back(event); }
 
     GameState state_ = GameState::Road;
     int money_ = kStartMoney;
     int score_ = 0;
     int runsCompleted_ = 0;
+    int nextCashAt_ = kPointsForCash;
+    bool paused_ = false;
     unsigned nextCourseSeed_ = 1;
     RoadLevel road_;
     SlopeLevel slope_;

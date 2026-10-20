@@ -222,6 +222,7 @@ TEST(GameTest, EachRunHasNewCourse) {
     goToSlope(game);
     const float firstGateX = game.slope().gates()[0].leftX;
     game.finishRun(false);
+    game.road().clearCars();  // после заезда трафик на дороге начинается заново — убираем
     walk(game, Direction::Down, kRowsDoorToBottom);  // лыжи целы — сразу вниз
     ASSERT_EQ(game.state(), GameState::Slope);
     EXPECT_NE(game.slope().gates()[0].leftX, firstGateX);
@@ -319,4 +320,98 @@ TEST(GameEventsTest, GameOverMakesEvent) {
     Game game = gameWithEmptyRoad();
     putCarOnHorace(game);
     EXPECT_TRUE(has(collectUntil(game, GameEvent::GameOver), GameEvent::GameOver));
+}
+
+// ---------------------------------------------------------------------------
+// Правила оригинала: штраф за ворота, деньги за очки, пауза
+// ---------------------------------------------------------------------------
+
+namespace {
+
+// Склон с count воротами подряд точно по курсу (через каждые 100 px)
+void slopeWithGatesAhead(Game& game, int count, float firstY = 300) {
+    game.slope().startEmptyRun(firstY + count * 100.f + 100000.f);
+    for (int i = 0; i < count; ++i) {
+        game.slope().addGate(firstY + i * 100.f, skierCenterX(game));
+    }
+}
+
+void rideSeconds(Game& game, float seconds) {
+    for (float t = 0; t < seconds; t += 0.01f) game.update(0.01f);
+}
+
+} // namespace
+
+TEST(GameRulesTest, MissedGateCostsPoints) {
+    Game game = gameWithEmptyRoad();
+    goToSlope(game);
+    slopeWithGatesAhead(game, 2);
+    game.slope().addGate(600, skierCenterX(game) + 300);  // третьи — сбоку
+    rideSeconds(game, 3.f);
+    EXPECT_EQ(game.score(), 2 * Game::kGatePoints - Game::kGatePenalty);
+}
+
+TEST(GameRulesTest, ScoreNeverGoesBelowZero) {
+    Game game = gameWithEmptyRoad();
+    goToSlope(game);
+    game.slope().startEmptyRun(10000);
+    game.slope().addGate(300, skierCenterX(game) + 300);
+    rideSeconds(game, 2.f);
+    EXPECT_EQ(game.score(), 0);
+}
+
+TEST(GameRulesTest, Every1000PointsGivesCash) {
+    Game game = gameWithEmptyRoad();
+    goToSlope(game);
+    const int moneyBefore = game.money();
+    const int gates = Game::kPointsForCash / Game::kGatePoints;  // ровно на 1000 очков
+    slopeWithGatesAhead(game, gates);
+    game.takeEvents();
+    const auto events = collectUntil(game, GameEvent::BonusMoney);
+    EXPECT_EQ(game.score(), Game::kPointsForCash);
+    EXPECT_EQ(game.money(), moneyBefore + Game::kCashBonus);
+    EXPECT_EQ(game.nextCashAt(), 2 * Game::kPointsForCash);
+    EXPECT_TRUE(has(events, GameEvent::BonusMoney));
+}
+
+TEST(GameRulesTest, SameThousandIsNotPaidTwice) {
+    Game game = gameWithEmptyRoad();
+    goToSlope(game);
+    const int moneyBefore = game.money();
+    const int gates = Game::kPointsForCash / Game::kGatePoints;
+    slopeWithGatesAhead(game, gates);
+    const float afterLast = 300 + gates * 100.f;
+    game.slope().addGate(afterLast, skierCenterX(game) + 300);        // пропуск: 1000 -> 990
+    game.slope().addGate(afterLast + 100, skierCenterX(game));        // снова 1000
+    rideSeconds(game, (afterLast + 300) / horace::SlopeLevel::kDownSpeed);
+    EXPECT_EQ(game.score(), Game::kPointsForCash);
+    EXPECT_EQ(game.money(), moneyBefore + Game::kCashBonus);  // заплатили один раз
+}
+
+TEST(GameRulesTest, PauseFreezesGame) {
+    Game game = gameWithEmptyRoad();
+    game.road().addCar(Car(horace::Rect{0, RoadLevel::laneY(0), 80, 40}, 100.f));
+    game.togglePause();
+    EXPECT_TRUE(game.isPaused());
+    game.update(1.f);
+    EXPECT_FLOAT_EQ(game.road().cars()[0].bounds().x, 0.f);  // машина стоит
+    const float y = game.road().horace().bounds().y;
+    game.moveHorace(Direction::Up);
+    EXPECT_FLOAT_EQ(game.road().horace().bounds().y, y);     // Хорас стоит
+}
+
+TEST(GameRulesTest, UnpauseContinues) {
+    Game game = gameWithEmptyRoad();
+    game.road().addCar(Car(horace::Rect{0, RoadLevel::laneY(0), 80, 40}, 100.f));
+    game.togglePause();
+    game.togglePause();
+    game.update(1.f);
+    EXPECT_GT(game.road().cars()[0].bounds().x, 0.f);
+}
+
+TEST(GameRulesTest, CannotPauseAfterGameOver) {
+    Game game = gameWithEmptyRoad();
+    loseAllMoney(game);
+    game.togglePause();
+    EXPECT_FALSE(game.isPaused());
 }
