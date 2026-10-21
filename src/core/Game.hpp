@@ -1,5 +1,6 @@
 #pragma once
 
+#include "core/HighScores.hpp"
 #include "core/RoadLevel.hpp"
 #include "core/SlopeLevel.hpp"
 
@@ -13,12 +14,15 @@ namespace horace {
 //    ^               ^                                                             |
 //    |               +--------------------------Enter (у лавки)--------------------+
 //    |               |
-//    +--Enter-- GameOver <--(деньги кончились)
+//    |          (деньги кончились) --(попал в рекорды)--> EnterName --Enter--+
+//    |               |                                                       |
+//    +--Enter-- GameOver <-------------------------------------------------+
 enum class GameState {
     Menu,        // стартовое меню
     Road,        // переход дороги
     Slope,       // спуск
     RunResults,  // итоги заезда
+    EnterName,   // новый рекорд — вводим имя
     GameOver,    // деньги кончились
 };
 
@@ -49,6 +53,9 @@ enum class GameEvent {
     GameOver,    // деньги кончились
     BonusMoney,  // набрал очередную 1000 очков — +$10
     Confirm,     // нажали Enter в меню / на экране итогов
+    HighScoreAdded,  // в таблицу рекордов добавлен результат — пора сохранить файл
+    DemoModeOn,      // включили демо-режим
+    DemoModeOff,     // выключили демо-режим
 };
 
 // Правила игры: деньги, очки, переходы между состояниями.
@@ -66,7 +73,17 @@ public:
     static constexpr int kGatePoints   = 10;   // за пройденные ворота
     static constexpr int kGatePenalty  = 10;   // штраф за пропущенные
 
+    // Демо-режим (для показа игры): машины не сбивают, деревья не ломают лыжи.
+    // Включается и выключается, если нажать «секретную» клавишу kDemoPresses раз
+    // подряд, не дольше kDemoPressGap секунд между нажатиями.
+    static constexpr int   kDemoPresses  = 5;
+    static constexpr float kDemoPressGap = 1.5f;
+
     Game();  // игра начинается со стартового меню
+
+    // Нажатие «секретной» клавиши демо-режима (в app — клавиша «ё»)
+    void pressDemoKey();
+    bool isDemoMode() const { return demoMode_; }
 
     // Enter: в меню — начать игру, на итогах заезда — идти дальше,
     // после конца игры — вернуться в меню
@@ -90,6 +107,18 @@ public:
     void finishRun(bool skisBroken);
     // Итоги последнего заезда
     const RunStats& lastRun() const { return lastRun_; }
+
+    // Таблица рекордов. Загружает и сохраняет её app (файлы — не дело логики),
+    // а Game решает, когда результат в неё попадает. Переживает начало новой игры.
+    HighScores& highScores() { return highScores_; }
+    const HighScores& highScores() const { return highScores_; }
+
+    // Ввод имени для рекорда (в состоянии EnterName):
+    // буквы (латиница и кириллица), цифры, пробел, '-', '_'; символ 8 — стереть.
+    void typeNameChar(char32_t c);
+    const std::string& nameInput() const { return nameInput_; }
+    // Место в таблице (с 0) последнего добавленного рекорда; -1 — не попал
+    int lastRank() const { return lastRank_; }
 
     GameState state() const { return state_; }
     int money() const { return money_; }
@@ -115,6 +144,8 @@ private:
     void payAmbulance();
     void rentSkis();
     void gameOver();
+    void saveHighScore();
+    void applyDemoMode(bool on);  // включить неуязвимость на дороге и склоне
     void addScore(int points);  // очки не уходят ниже нуля; каждая 1000 — +$10
     void emit(GameEvent event) { events_.push_back(event); }
 
@@ -129,6 +160,12 @@ private:
     RunStats lastRun_;   // последний законченный
     int runStartScore_ = 0;
     int runStartMoney_ = 0;
+    HighScores highScores_;
+    std::string nameInput_;
+    int lastRank_ = -1;
+    bool demoMode_ = false;
+    int demoPresses_ = 0;
+    float sinceDemoPress_ = 0.f;
     RoadLevel road_;
     SlopeLevel slope_;
     std::vector<GameEvent> events_;

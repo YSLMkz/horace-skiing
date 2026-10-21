@@ -8,10 +8,15 @@
 #include <algorithm>
 #include <iostream>
 #include <string>
+#include <vector>
 
 // HORACE_ASSETS_DIR задаётся в CMakeLists.txt — это путь к папке assets
 #ifndef HORACE_ASSETS_DIR
 #define HORACE_ASSETS_DIR "assets"
+#endif
+// HORACE_SCORES_FILE тоже задаётся в CMakeLists.txt — файл таблицы рекордов
+#ifndef HORACE_SCORES_FILE
+#define HORACE_SCORES_FILE "highscores.txt"
 #endif
 
 namespace {
@@ -61,6 +66,8 @@ int main() {
     horace::SoundPlayer sounds;  // звуки бипера (синтезируются при запуске)
 
     Game game;
+    // Рекорды прошлых игр. Файла ещё нет — значит, таблица пока пустая.
+    game.highScores().load(HORACE_SCORES_FILE);
     sf::Clock clock;
 
     while (window.isOpen()) {
@@ -69,6 +76,21 @@ int main() {
         while (window.pollEvent(event)) {
             if (event.type == sf::Event::Closed) {
                 window.close();
+            } else if (game.state() == GameState::EnterName) {
+                // Вводим имя: буквы приходят событием TextEntered (с учётом раскладки),
+                // а горячие клавиши (M, N, P…) в это время не работают
+                if (event.type == sf::Event::TextEntered) {
+                    game.typeNameChar(static_cast<char32_t>(event.text.unicode));
+                } else if (event.type == sf::Event::KeyPressed) {
+                    if (event.key.code == sf::Keyboard::Enter) game.confirm();
+                    if (event.key.code == sf::Keyboard::Escape) window.close();
+                }
+            } else if (event.type == sf::Event::KeyPressed &&
+                       (event.key.scancode == sf::Keyboard::Scan::Grave ||
+                        event.key.code == sf::Keyboard::Grave)) {
+                // Клавиша «ё» (слева от 1). Проверяем физическую клавишу (scancode),
+                // поэтому работает в любой раскладке. 5 раз подряд — демо-режим.
+                game.pressDemoKey();
             } else if (event.type == sf::Event::KeyPressed) {
                 switch (event.key.code) {
                 case sf::Keyboard::Up:    game.moveHorace(Direction::Up);    break;
@@ -113,7 +135,13 @@ int main() {
         game.update(dt);
 
         // 3. Звук: всё, что случилось за кадр, + сирена, пока едет скорая
-        sounds.handle(game.takeEvents());
+        const std::vector<horace::GameEvent> events = game.takeEvents();
+        sounds.handle(events);
+        // Новый рекорд — сразу записываем таблицу в файл
+        if (std::find(events.begin(), events.end(), horace::GameEvent::HighScoreAdded) != events.end() &&
+            !game.highScores().save(HORACE_SCORES_FILE)) {
+            std::cerr << "Cannot save high scores to " << HORACE_SCORES_FILE << "\n";
+        }
         sounds.setSiren(game.state() == GameState::Road && !game.isPaused() &&
                         game.road().ambulance().isActive());
 

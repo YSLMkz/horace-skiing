@@ -48,6 +48,7 @@ add_library(horace_core
     src/core/Car.cpp
     src/core/Ambulance.cpp
     src/core/Beeper.cpp
+    src/core/HighScores.cpp
     src/core/RoadLevel.cpp
     src/core/SlopeLevel.cpp
     src/core/Game.cpp
@@ -80,7 +81,10 @@ if(WIN32)
 endif()
 
 # Путь к шрифтам и картинкам — чтобы игра находила их, откуда бы её ни запустили
-target_compile_definitions(horace PRIVATE HORACE_ASSETS_DIR="${CMAKE_CURRENT_SOURCE_DIR}/assets")
+target_compile_definitions(horace PRIVATE
+    HORACE_ASSETS_DIR="${CMAKE_CURRENT_SOURCE_DIR}/assets"
+    # таблица рекордов — в папке проекта (в .gitignore: у каждого свои рекорды)
+    HORACE_SCORES_FILE="${CMAKE_CURRENT_SOURCE_DIR}/highscores.txt")
 
 # ---------------------------------------------------------------------------
 # 3) Модульные тесты
@@ -92,6 +96,7 @@ add_executable(horace_tests
     tests/CarTest.cpp
     tests/AmbulanceTest.cpp
     tests/BeeperTest.cpp
+    tests/HighScoresTest.cpp
     tests/RoadLevelTest.cpp
     tests/SlopeLevelTest.cpp
     tests/GameTest.cpp

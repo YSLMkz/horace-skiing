@@ -526,3 +526,198 @@ TEST(GameOverTest, EnterDoesNothingDuringPlay) {
     game.confirm();
     EXPECT_EQ(game.state(), GameState::Road);
 }
+
+// ---------------------------------------------------------------------------
+// Рекорды: ввод имени после конца игры
+// ---------------------------------------------------------------------------
+
+namespace {
+
+// Игра, в которой набрали очки за один заезд, а потом спустили все деньги на скорую
+Game gameOverWithPoints() {
+    Game game = gameWithEmptyRoad();
+    goToSlope(game);
+    game.slope().startEmptyRun(1000);
+    game.slope().addGate(300, skierCenterX(game));
+    rideWhileOnSlope(game);  // ворота + финиш
+    game.confirm();          // итоги -> дорога (у лавки, лыжи целы)
+    game.road().clearCars();
+    loseAllMoney(game);
+    return game;
+}
+
+void type(Game& game, const std::u32string& text) {
+    for (char32_t c : text) game.typeNameChar(c);
+}
+
+} // namespace
+
+TEST(HighScoreGameTest, GoodResultAsksForName) {
+    Game game = gameOverWithPoints();
+    EXPECT_GT(game.score(), 0);
+    EXPECT_EQ(game.state(), GameState::EnterName);
+}
+
+TEST(HighScoreGameTest, ZeroScoreSkipsNameEntry) {
+    Game game = gameWithEmptyRoad();
+    loseAllMoney(game);
+    EXPECT_EQ(game.state(), GameState::GameOver);
+}
+
+TEST(HighScoreGameTest, TypingAndBackspace) {
+    Game game = gameOverWithPoints();
+    type(game, U"MAXX");
+    game.typeNameChar(8);  // Backspace
+    EXPECT_EQ(game.nameInput(), "MAX");
+}
+
+TEST(HighScoreGameTest, RussianNameAndLengthLimit) {
+    Game game = gameOverWithPoints();
+    type(game, U"Тимур-2007!!");  // '!' не принимается, остальное — до 8 букв
+    EXPECT_EQ(game.nameInput(), "Тимур-20");
+}
+
+TEST(HighScoreGameTest, EnterSavesResultToTable) {
+    Game game = gameOverWithPoints();
+    const int score = game.score();
+    type(game, U"MAX");
+    game.takeEvents();
+    game.confirm();
+    EXPECT_EQ(game.state(), GameState::GameOver);
+    ASSERT_EQ(game.highScores().entries().size(), 1u);
+    EXPECT_EQ(game.highScores().entries()[0].name, "MAX");
+    EXPECT_EQ(game.highScores().entries()[0].score, score);
+    EXPECT_EQ(game.highScores().entries()[0].runs, 1);
+    EXPECT_EQ(game.lastRank(), 0);
+    EXPECT_TRUE(has(game.takeEvents(), GameEvent::HighScoreAdded));
+}
+
+TEST(HighScoreGameTest, EmptyNameBecomesPlayer) {
+    Game game = gameOverWithPoints();
+    game.confirm();
+    EXPECT_EQ(game.highScores().entries()[0].name, "ИГРОК");
+}
+
+TEST(HighScoreGameTest, TableSurvivesNewGame) {
+    Game game = gameOverWithPoints();
+    type(game, U"MAX");
+    game.confirm();  // сохранили
+    game.confirm();  // в меню — новая игра
+    EXPECT_EQ(game.state(), GameState::Menu);
+    EXPECT_EQ(game.score(), 0);
+    ASSERT_EQ(game.highScores().entries().size(), 1u);
+    EXPECT_EQ(game.highScores().entries()[0].name, "MAX");
+}
+
+TEST(HighScoreGameTest, TypingIgnoredOutsideNameEntry) {
+    Game game = gameWithEmptyRoad();
+    type(game, U"ABC");
+    EXPECT_TRUE(game.nameInput().empty());
+}
+
+TEST(HighScoreGameTest, WeakResultDoesNotAskNameWhenTableFull) {
+    Game game = gameWithEmptyRoad();
+    for (int i = 0; i < 10; ++i) {
+        game.highScores().add(horace::ScoreEntry{"PRO", 100000, 9});
+    }
+    // набрали немного очков и проиграли
+    goToSlope(game);
+    game.slope().startEmptyRun(1000);
+    rideWhileOnSlope(game);
+    game.confirm();
+    game.road().clearCars();
+    loseAllMoney(game);
+    EXPECT_EQ(game.state(), GameState::GameOver);
+}
+
+// ---------------------------------------------------------------------------
+// Демо-режим: 5 нажатий «ё» подряд
+// ---------------------------------------------------------------------------
+
+namespace {
+void pressDemo(Game& game, int times) {
+    for (int i = 0; i < times; ++i) game.pressDemoKey();
+}
+} // namespace
+
+TEST(DemoModeTest, OffByDefault) {
+    Game game;
+    EXPECT_FALSE(game.isDemoMode());
+}
+
+TEST(DemoModeTest, FivePressesTurnItOn) {
+    Game game;
+    pressDemo(game, Game::kDemoPresses);
+    EXPECT_TRUE(game.isDemoMode());
+    EXPECT_TRUE(has(game.takeEvents(), GameEvent::DemoModeOn));
+}
+
+TEST(DemoModeTest, FourPressesAreNotEnough) {
+    Game game;
+    pressDemo(game, Game::kDemoPresses - 1);
+    EXPECT_FALSE(game.isDemoMode());
+}
+
+TEST(DemoModeTest, SlowPressesDoNotCount) {
+    Game game;
+    pressDemo(game, 3);
+    game.update(Game::kDemoPressGap + 0.5f);  // задумались
+    pressDemo(game, 2);
+    EXPECT_FALSE(game.isDemoMode());
+    pressDemo(game, 3);  // теперь 5 быстрых подряд
+    EXPECT_TRUE(game.isDemoMode());
+}
+
+TEST(DemoModeTest, FiveMorePressesTurnItOff) {
+    Game game;
+    pressDemo(game, Game::kDemoPresses);
+    game.takeEvents();
+    pressDemo(game, Game::kDemoPresses);
+    EXPECT_FALSE(game.isDemoMode());
+    EXPECT_TRUE(has(game.takeEvents(), GameEvent::DemoModeOff));
+}
+
+TEST(DemoModeTest, CarsDoNotHitInDemoMode) {
+    Game game = gameWithEmptyRoad();
+    pressDemo(game, Game::kDemoPresses);
+    putCarOnHorace(game);
+    game.update(0.1f);
+    EXPECT_FALSE(game.road().ambulance().isActive());
+    EXPECT_EQ(game.money(), Game::kStartMoney);
+}
+
+TEST(DemoModeTest, CanWalkThroughTrafficToTheShop) {
+    Game game;  // обычный трафик, без очистки дороги
+    game.confirm();
+    pressDemo(game, Game::kDemoPresses);
+    for (int i = 0; i < kRowsBottomToShop; ++i) {
+        game.moveHorace(Direction::Up);
+        game.update(0.3f);  // медленно, машины успевают наехать
+    }
+    EXPECT_TRUE(game.road().hasSkis());
+    EXPECT_EQ(game.money(), Game::kStartMoney - Game::kSkiPrice);  // только прокат
+}
+
+TEST(DemoModeTest, TreesDoNotBreakSkisInDemoMode) {
+    Game game = gameWithEmptyRoad();
+    pressDemo(game, Game::kDemoPresses);
+    goToSlope(game);
+    game.slope().startEmptyRun(2000);
+    const float x = game.slope().skier().x;
+    for (int i = 0; i < 5; ++i) game.slope().addTree(x, 300 + i * 200.f);
+    rideWhileOnSlope(game);
+    EXPECT_EQ(game.slope().damage(), 0);
+    EXPECT_TRUE(game.lastRun().finished);
+}
+
+TEST(DemoModeTest, StaysOnAfterNewGame) {
+    Game game = gameWithEmptyRoad();
+    loseAllMoney(game);           // без демо-режима проиграли
+    pressDemo(game, Game::kDemoPresses);
+    game.confirm();               // новая игра — меню
+    EXPECT_TRUE(game.isDemoMode());
+    game.confirm();               // на дорогу
+    putCarOnHorace(game);
+    game.update(0.1f);
+    EXPECT_FALSE(game.road().ambulance().isActive());
+}

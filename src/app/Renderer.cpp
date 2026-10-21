@@ -92,8 +92,11 @@ void Renderer::draw(sf::RenderTarget& target, const Game& game) const {
     switch (game.state()) {
     case GameState::Menu:
         drawRoad(target, game.road(), false);  // на фоне едут машины
-        drawMenu(target);
-        return;                         // без HUD
+        drawMenu(target, game);
+        if (game.isDemoMode()) {
+            drawText(target, "ДЕМО-РЕЖИМ", 8, 8, 16, false, kFlag);
+        }
+        return;                                // без HUD
     case GameState::Road:
         drawRoad(target, game.road());
         break;
@@ -104,17 +107,25 @@ void Renderer::draw(sf::RenderTarget& target, const Game& game) const {
         drawSlope(target, game.slope());  // склон «замер» на фоне
         drawRunResults(target, game);
         break;
+    case GameState::EnterName:
+        drawRoad(target, game.road());
+        drawEnterName(target, game);
+        break;
     case GameState::GameOver:
         drawRoad(target, game.road());
         drawGameOver(target, game);
         break;
     }
     drawHud(target, game);
+    if (game.isDemoMode()) {
+        // под деньгами и очками, красным
+        drawText(target, "ДЕМО-РЕЖИМ", 8, 80, 16, false, kFlag);
+    }
 
     if (game.isPaused()) {
         drawRect(target, Rect{0, h / 2 - 50, w, 100}, sf::Color(255, 255, 255, 220));
         drawText(target, "ПАУЗА", w / 2, h / 2 - 40, 40, true);
-        drawText(target, "P — продолжить", w / 2, h / 2 + 16, 16, true);
+        drawText(target, "P - продолжить", w / 2, h / 2 + 16, 16, true);
     }
 }
 
@@ -135,7 +146,7 @@ void Renderer::drawBlinkingText(sf::RenderTarget& target, const std::string& utf
     }
 }
 
-void Renderer::drawMenu(sf::RenderTarget& target) const {
+void Renderer::drawMenu(sf::RenderTarget& target, const Game& game) const {
     // Размеры текста кратны 8 (размер «пикселя» шрифта Press Start 2P):
     // 16 — обычный текст, 24 — крупный, 32 — заголовок.
     // Шрифт широкий: строка при размере 16 вмещает ~40 символов на 640 px.
@@ -143,25 +154,83 @@ void Renderer::drawMenu(sf::RenderTarget& target) const {
     drawPanel(target, Rect{56, 56, 688, 488});
 
     drawText(target, "HORACE GOES SKIING", cx, 80, 32, true);
-    drawText(target, "аналог игры для ZX Spectrum · 1982", cx, 128, 16, true);
+    drawText(target, "аналог игры для ZX Spectrum, 1982", cx, 128, 16, true);
 
-    float y = 176;
-    for (const char* line : {
-             "Перейди дорогу, возьми лыжи,",
-             "вернись и съезжай меж флажков.",
-             "",
-             "Старт $40. Лыжи $10. Скорая $10.",
-             "Ворота +10, пропуск -10,",
-             "финиш +100. 1000 очков = +$10.",
-             "",
-             "Дорога: стрелки — шаг",
-             "Склон:  ← → поворот, ↓ быстрее",
-             "P пауза  M музыка  N звуки",
-         }) {
-        drawText(target, line, 88, y, 16);
-        y += 26;
+    // Как в «демо-режиме» игровых автоматов: правила и таблица рекордов
+    // сменяют друг друга каждые 7 секунд
+    const bool showScores = !game.highScores().empty() &&
+                            static_cast<int>(clock_.getElapsedTime().asSeconds() / 7.f) % 2 == 1;
+    if (showScores) {
+        drawText(target, "ЛУЧШИЕ ИГРОКИ", cx, 176, 24, true);
+        drawHighScoreTable(target, game.highScores(), 216, -1);
+    } else {
+        float y = 176;
+        for (const char* line : {
+                 "Перейди дорогу, возьми лыжи,",
+                 "вернись и съезжай меж флажков.",
+                 "",
+                 "Старт $40. Лыжи $10. Скорая $10.",
+                 "Ворота +10, пропуск -10,",
+                 "финиш +100. 1000 очков = +$10.",
+                 "",
+                 "Дорога: шаг стрелками",
+                 "Склон:  ← → поворот, ↓ быстрее",
+                 "P пауза  M музыка  N звуки",
+             }) {
+            drawText(target, line, 88, y, 16);
+            y += 26;
+        }
     }
     drawBlinkingText(target, "НАЖМИТЕ ENTER", cx, 472, 24);
+}
+
+void Renderer::drawHighScoreTable(sf::RenderTarget& target, const HighScores& table, float y,
+                                  int highlight) const {
+    const auto& entries = table.entries();
+    if (entries.empty()) {
+        drawText(target, "Рекордов пока нет", RoadLevel::kWidth / 2, y + 40, 16, true);
+        return;
+    }
+    // Шрифт моноширинный, поэтому столбцы выравниваем пробелами:
+    // " 1. ИМЯ.....   1234"
+    // ширина строки: 3 + 1 + 8 + 7 = 19 символов по 16 px — ставим по центру
+    const float rowWidth = 19 * 16.f;
+    const float left = std::round((RoadLevel::kWidth - rowWidth) / 2);
+    for (size_t i = 0; i < entries.size(); ++i) {
+        const ScoreEntry& e = entries[i];
+        std::string rank = std::to_string(i + 1) + ".";
+        if (rank.size() < 3) rank = " " + rank;
+        std::string name = e.name;
+        for (size_t n = utf8::length(name); n < HighScores::kMaxNameLength; ++n) name += ' ';
+        std::string score = std::to_string(e.score);
+        while (score.size() < 7) score = " " + score;
+
+        if (static_cast<int>(i) == highlight) {
+            drawRect(target, Rect{left - 8, y - 4, rowWidth + 16, 24}, sf::Color(255, 220, 90));
+        }
+        drawText(target, rank + " " + name + score, left, y, 16);
+        y += 24;
+    }
+}
+
+void Renderer::drawEnterName(sf::RenderTarget& target, const Game& game) const {
+    const float cx = RoadLevel::kWidth / 2;
+    drawPanel(target, Rect{88, 104, 624, 392});
+    drawText(target, "НОВЫЙ РЕКОРД!", cx, 136, 32, true);
+    drawText(target, "Очки: " + std::to_string(game.score()), cx, 200, 24, true);
+    drawText(target, "Место в таблице: " + std::to_string(game.highScores().rankFor(game.score()) + 1),
+             cx, 240, 16, true);
+
+    drawText(target, "Введите имя:", cx, 296, 16, true);
+    drawRect(target, Rect{cx - 152, 328, 304, 40}, kText);
+    drawRect(target, Rect{cx - 148, 332, 296, 32}, sf::Color(250, 250, 255));
+    // мигающий курсор «_» в конце имени
+    const bool cursorOn = std::fmod(clock_.getElapsedTime().asSeconds(), 0.8f) < 0.5f;
+    const bool full = utf8::length(game.nameInput()) >= HighScores::kMaxNameLength;
+    drawText(target, game.nameInput() + (cursorOn && !full ? "_" : ""), cx - 136, 340, 16);
+
+    drawText(target, "буквы и цифры, до 8 символов", cx, 392, 16, true);
+    drawText(target, "ENTER - СОХРАНИТЬ", cx, 440, 24, true);
 }
 
 void Renderer::drawRunResults(sf::RenderTarget& target, const Game& game) const {
@@ -181,24 +250,31 @@ void Renderer::drawRunResults(sf::RenderTarget& target, const Game& game) const 
     line(y, "Ворота пройдены", std::to_string(r.gatesPassed) + " (+" + std::to_string(Game::kGatePoints) + ")"); y += 32;
     line(y, "Ворота пропущены", std::to_string(r.gatesMissed) + " (-" + std::to_string(Game::kGatePenalty) + ")"); y += 32;
     line(y, "Деревья", std::to_string(r.treesHit)); y += 32;
-    line(y, "Бонус за финиш", r.finished ? "+" + std::to_string(Game::kFinishBonus) : "—"); y += 48;
+    line(y, "Бонус за финиш", r.finished ? "+" + std::to_string(Game::kFinishBonus) : "нет"); y += 48;
     line(y, "Очки за заезд", (r.points >= 0 ? "+" : "") + std::to_string(r.points)); y += 32;
     line(y, "Всего очков", std::to_string(game.score())); y += 32;
     if (r.cashBonus > 0) {
         line(y, "Бонус деньгами", "+$" + std::to_string(r.cashBonus));
     }
-    drawText(target, r.skisBroken ? "Лыжи сломаны: прокат $10" : "Лыжи целы — сразу к склону",
+    drawText(target, r.skisBroken ? "Лыжи сломаны: прокат $10" : "Лыжи целы, сразу к склону",
              cx, 432, 16, true);
-    drawBlinkingText(target, "ENTER — ДАЛЬШЕ", cx, 472, 24);
+    drawBlinkingText(target, "ENTER - ДАЛЬШЕ", cx, 472, 24);
 }
 
 void Renderer::drawGameOver(sf::RenderTarget& target, const Game& game) const {
     const float cx = RoadLevel::kWidth / 2;
-    drawPanel(target, Rect{160, 152, 480, 296});
-    drawText(target, "ДЕНЬГИ КОНЧИЛИСЬ", cx, 184, 24, true);
-    drawText(target, "Очки:    " + std::to_string(game.score()), 224, 256, 24);
-    drawText(target, "Заездов: " + std::to_string(game.runsCompleted()), 224, 296, 24);
-    drawBlinkingText(target, "ENTER — В МЕНЮ", cx, 384, 24);
+    drawPanel(target, Rect{56, 56, 688, 488});
+    drawText(target, "ДЕНЬГИ КОНЧИЛИСЬ", cx, 80, 24, true);
+    drawText(target, "Очки " + std::to_string(game.score()) + "   Заездов " +
+                         std::to_string(game.runsCompleted()),
+             cx, 120, 16, true);
+    if (game.lastRank() >= 0) {
+        drawText(target, "Новый рекорд! Место " + std::to_string(game.lastRank() + 1),
+                 cx, 148, 16, true);
+    }
+    drawText(target, "ЛУЧШИЕ ИГРОКИ", cx, 184, 16, true);
+    drawHighScoreTable(target, game.highScores(), 216, game.lastRank());
+    drawBlinkingText(target, "ENTER - В МЕНЮ", cx, 480, 24);
 }
 
 void Renderer::drawRoad(sf::RenderTarget& target, const RoadLevel& road, bool withPlayer) const {
@@ -235,7 +311,7 @@ void Renderer::drawRoad(sf::RenderTarget& target, const RoadLevel& road, bool wi
 
     const char* hint = road.hasSkis() ? "Лыжи есть! Вниз, к склону" : "Дойди до лавки за лыжами";
     if (road.ambulance().isActive()) {
-        hint = "Ой! Едет скорая — это будет стоить $10";
+        hint = "Ой! Едет скорая, это будет стоить $10";
     }
     drawText(target, hint, 8, RoadLevel::kHeight - 28, 16);
 }
@@ -366,13 +442,13 @@ void Renderer::drawHud(sf::RenderTarget& target, const Game& game) const {
 }
 
 void Renderer::drawText(sf::RenderTarget& target, const std::string& utf8, float x, float y,
-                        unsigned size, bool centered) const {
+                        unsigned size, bool centered, sf::Color color) const {
     if (!hasFont_) {
         return;
     }
     // Исходники в UTF-8, поэтому русский текст переводим через fromUtf8
     sf::Text text(sf::String::fromUtf8(utf8.begin(), utf8.end()), font_, size);
-    text.setFillColor(kText);
+    text.setFillColor(color);
     if (centered) {
         const sf::FloatRect b = text.getLocalBounds();
         text.setOrigin(std::round(b.left + b.width / 2.f), 0.f);

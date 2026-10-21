@@ -32,14 +32,19 @@ private:
     void drawHorace(sf::RenderTarget& target, const RoadLevel& road) const;
     void drawAmbulance(sf::RenderTarget& target, const Ambulance& ambulance) const;
     void drawHud(sf::RenderTarget& target, const Game& game) const;
-    void drawMenu(sf::RenderTarget& target) const;
+    void drawMenu(sf::RenderTarget& target, const Game& game) const;
+    void drawEnterName(sf::RenderTarget& target, const Game& game) const;
+    // Таблица рекордов: строка highlight (место с 0) подсвечивается
+    void drawHighScoreTable(sf::RenderTarget& target, const HighScores& table, float y,
+                            int highlight) const;
     void drawRunResults(sf::RenderTarget& target, const Game& game) const;
     void drawGameOver(sf::RenderTarget& target, const Game& game) const;
     void drawPanel(sf::RenderTarget& target, const Rect& r) const;
     void drawBlinkingText(sf::RenderTarget& target, const std::string& utf8, float x, float y,
                           unsigned size) const;
     void drawText(sf::RenderTarget& target, const std::string& utf8, float x, float y,
-                  unsigned size, bool centered = false) const;
+                  unsigned size, bool centered = false,
+                  sf::Color color = sf::Color(20, 20, 40)) const;
 
     sf::Font font_;
     bool hasFont_ = false;

@@ -17,10 +17,20 @@ void Game::confirm() {
         continueAfterResults();
         emit(GameEvent::Confirm);
         break;
-    case GameState::GameOver:
-        *this = Game();  // всё с нуля — снова стартовое меню
+    case GameState::EnterName:
+        saveHighScore();
         emit(GameEvent::Confirm);
         break;
+    case GameState::GameOver: {
+        // Всё с нуля — снова стартовое меню. Но рекорды и демо-режим сохраняем!
+        HighScores keep = std::move(highScores_);
+        const bool demo = demoMode_;
+        *this = Game();
+        highScores_ = std::move(keep);
+        applyDemoMode(demo);
+        emit(GameEvent::Confirm);
+        break;
+    }
     case GameState::Road:
     case GameState::Slope:
         break;  // во время игры Enter ничего не делает
@@ -69,7 +79,28 @@ void Game::addScore(int points) {
     }
 }
 
+void Game::pressDemoKey() {
+    // Слишком долгая пауза между нажатиями — считаем заново
+    if (sinceDemoPress_ > kDemoPressGap) {
+        demoPresses_ = 0;
+    }
+    sinceDemoPress_ = 0.f;
+    if (++demoPresses_ < kDemoPresses) {
+        return;
+    }
+    demoPresses_ = 0;
+    applyDemoMode(!demoMode_);
+    emit(demoMode_ ? GameEvent::DemoModeOn : GameEvent::DemoModeOff);
+}
+
+void Game::applyDemoMode(bool on) {
+    demoMode_ = on;
+    road_.setInvincible(on);
+    slope_.setInvincible(on);
+}
+
 void Game::update(float dt) {
+    sinceDemoPress_ += dt;  // считаем и на паузе, и в меню
     if (paused_) {
         return;
     }
@@ -84,6 +115,7 @@ void Game::update(float dt) {
         updateSlope(dt);
         break;
     case GameState::RunResults:
+    case GameState::EnterName:
     case GameState::GameOver:
         break;
     }
@@ -181,8 +213,34 @@ void Game::rentSkis() {
 void Game::gameOver() {
     money_ = 0;
     paused_ = false;
-    state_ = GameState::GameOver;
+    lastRank_ = -1;
+    // Попал в таблицу рекордов — сначала спросим имя
+    state_ = highScores_.qualifies(score_) ? GameState::EnterName : GameState::GameOver;
+    nameInput_.clear();
     emit(GameEvent::GameOver);
+}
+
+void Game::typeNameChar(char32_t c) {
+    if (state_ != GameState::EnterName) {
+        return;
+    }
+    if (c == 8) {  // Backspace
+        utf8::popBack(nameInput_);
+        return;
+    }
+    const bool latin = (c >= U'A' && c <= U'Z') || (c >= U'a' && c <= U'z');
+    const bool digit = c >= U'0' && c <= U'9';
+    const bool cyrillic = (c >= 0x0410 && c <= 0x044F) || c == 0x0401 || c == 0x0451;  // А-я, Ё, ё
+    const bool other = c == U' ' || c == U'-' || c == U'_';
+    if ((latin || digit || cyrillic || other) && utf8::length(nameInput_) < HighScores::kMaxNameLength) {
+        utf8::append(nameInput_, c);
+    }
+}
+
+void Game::saveHighScore() {
+    lastRank_ = highScores_.add(ScoreEntry{nameInput_, score_, runsCompleted_});
+    state_ = GameState::GameOver;
+    emit(GameEvent::HighScoreAdded);
 }
 
 } // namespace horace

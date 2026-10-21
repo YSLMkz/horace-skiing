@@ -70,6 +70,10 @@ public:
 
     std::vector<SlopeEvent> update(float dt);
 
+    // Демо-режим: деревья не мешают
+    void setInvincible(bool on) { invincible_ = on; }
+    bool isInvincible() const { return invincible_; }
+
     const Rect& skier() const { return skier_; }               // в мировых координатах
     float cameraY() const { return skier_.y - kSkierScreenY; } // мировой y верхнего края экрана
     const std::vector<Gate>& gates() const { return gates_; }
@@ -93,6 +97,7 @@ private:
     int damage_ = 0;
     float crashTimer_ = 0.f;
     bool over_ = false;
+    bool invincible_ = false;
 };
 
 } // namespace horace

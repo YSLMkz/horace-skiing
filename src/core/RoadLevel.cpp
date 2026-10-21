@@ -210,7 +210,7 @@ RoadEvent RoadLevel::update(float dt) {
     updateTraffic(dt);
 
     for (const Car& car : cars_) {
-        if (car.bounds().intersects(horace_.bounds())) {
+        if (!invincible_ && car.bounds().intersects(horace_.bounds())) {
             ambulance_.call(horace_.bounds(), kWidth);
             return RoadEvent::HitByCar;
         }

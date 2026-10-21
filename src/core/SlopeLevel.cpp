@@ -106,6 +106,9 @@ void SlopeLevel::checkGates(float prevBottom, std::vector<SlopeEvent>& events) {
 }
 
 void SlopeLevel::checkTrees(std::vector<SlopeEvent>& events) {
+    if (invincible_) {
+        return;  // демо-режим: проезжаем сквозь деревья
+    }
     for (Tree& tree : trees_) {
         if (tree.hit || !tree.bounds.intersects(skier_)) {
             continue;

@@ -69,6 +69,10 @@ public:
     // Хорас уже в скорой (его не надо рисовать)
     bool isHoraceInAmbulance() const;
 
+    // Демо-режим: машины проезжают сквозь Хораса
+    void setInvincible(bool on) { invincible_ = on; }
+    bool isInvincible() const { return invincible_; }
+
     // Сколько секунд Хорас уже переходит дорогу (от этого растёт трафик)
     float crossingTime() const { return crossingTime_; }
 
@@ -100,6 +104,7 @@ private:
     Rect shop_;
     Ambulance ambulance_;
     bool hasSkis_ = false;
+    bool invincible_ = false;
 
     float crossingTime_ = 0.f;
     float spawnTimer_ = kSpawnInterval;
