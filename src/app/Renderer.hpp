@@ -16,8 +16,9 @@ namespace horace {
 // Машины и скорая — текстуры из assets/textures; если их нет, рисуются прямоугольники.
 class Renderer {
 public:
-    // Возвращает false, если шрифт не найден (тогда текст просто не рисуется)
-    bool loadFont(const std::string& path);
+    // Возвращает false, если шрифт не найден (тогда текст просто не рисуется).
+    // pixelFont = true — пиксельный шрифт: рисуется без сглаживания.
+    bool loadFont(const std::string& path, bool pixelFont = false);
     // Возвращает false, если каких-то текстур нет (тогда вместо них — прямоугольники)
     bool loadTextures(const std::string& dir);
 

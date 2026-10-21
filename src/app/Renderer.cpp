@@ -50,8 +50,13 @@ void drawSprite(sf::RenderTarget& target, const sf::Texture& texture, const Rect
 
 } // namespace
 
-bool Renderer::loadFont(const std::string& path) {
+bool Renderer::loadFont(const std::string& path, bool pixelFont) {
     hasFont_ = font_.loadFromFile(path);
+    if (hasFont_ && pixelFont) {
+        // Пиксельный шрифт нельзя сглаживать — иначе квадратные пиксели
+        // размоются в кашу. Размеры текста тогда берём кратными 8.
+        font_.setSmooth(false);
+    }
     return hasFont_;
 }
 
@@ -109,7 +114,7 @@ void Renderer::draw(sf::RenderTarget& target, const Game& game) const {
     if (game.isPaused()) {
         drawRect(target, Rect{0, h / 2 - 50, w, 100}, sf::Color(255, 255, 255, 220));
         drawText(target, "ПАУЗА", w / 2, h / 2 - 40, 40, true);
-        drawText(target, "P — продолжить", w / 2, h / 2 + 12, 20, true);
+        drawText(target, "P — продолжить", w / 2, h / 2 + 16, 16, true);
     }
 }
 
@@ -131,68 +136,69 @@ void Renderer::drawBlinkingText(sf::RenderTarget& target, const std::string& utf
 }
 
 void Renderer::drawMenu(sf::RenderTarget& target) const {
+    // Размеры текста кратны 8 (размер «пикселя» шрифта Press Start 2P):
+    // 16 — обычный текст, 24 — крупный, 32 — заголовок.
+    // Шрифт широкий: строка при размере 16 вмещает ~40 символов на 640 px.
     const float cx = RoadLevel::kWidth / 2;
-    drawPanel(target, Rect{90, 70, 620, 460});
+    drawPanel(target, Rect{56, 56, 688, 488});
 
-    drawText(target, "HORACE GOES SKIING", cx, 92, 44, true);
-    drawText(target, "аналог игры для ZX Spectrum (1982) · курсовая работа", cx, 150, 16, true);
+    drawText(target, "HORACE GOES SKIING", cx, 80, 32, true);
+    drawText(target, "аналог игры для ZX Spectrum · 1982", cx, 128, 16, true);
 
-    float y = 200;
-    const float left = 130;
+    float y = 176;
     for (const char* line : {
-             "Перейди дорогу, возьми лыжи напрокат,",
-             "вернись и съезжай со склона между флажками.",
+             "Перейди дорогу, возьми лыжи,",
+             "вернись и съезжай меж флажков.",
              "",
-             "Старт: $40.  Лыжи — $10.  Скорая — $10.",
-             "Ворота +10, пропуск −10, финиш +100.",
-             "Каждые 1000 очков — ещё $10.",
+             "Старт $40. Лыжи $10. Скорая $10.",
+             "Ворота +10, пропуск -10,",
+             "финиш +100. 1000 очков = +$10.",
              "",
-             "Дорога:  стрелки — шаг",
-             "Склон:   ← → поворот,  ↓ быстрее",
-             "P пауза   M музыка   N звуки   Esc выход",
+             "Дорога: стрелки — шаг",
+             "Склон:  ← → поворот, ↓ быстрее",
+             "P пауза  M музыка  N звуки",
          }) {
-        drawText(target, line, left, y, 18);
+        drawText(target, line, 88, y, 16);
         y += 26;
     }
-    drawBlinkingText(target, "Нажмите Enter", cx, 480, 26);
+    drawBlinkingText(target, "НАЖМИТЕ ENTER", cx, 472, 24);
 }
 
 void Renderer::drawRunResults(sf::RenderTarget& target, const Game& game) const {
     const RunStats& r = game.lastRun();
     const float cx = RoadLevel::kWidth / 2;
-    drawPanel(target, Rect{150, 80, 500, 440});
+    drawPanel(target, Rect{112, 80, 576, 440});
 
     const std::string title = "ЗАЕЗД " + std::to_string(r.number) +
                               (r.finished ? ": ФИНИШ!" : ": ЛЫЖИ СЛОМАНЫ");
-    drawText(target, title, cx, 100, 32, true);
+    drawText(target, title, cx, 104, 24, true);
 
     auto line = [&](float y, const std::string& label, const std::string& value) {
-        drawText(target, label, 190, y, 20);
-        drawText(target, value, 480, y, 20);
+        drawText(target, label, 144, y, 16);
+        drawText(target, value, 472, y, 16);
     };
-    float y = 165;
-    line(y, "Ворота пройдены", std::to_string(r.gatesPassed) + "  (+" + std::to_string(Game::kGatePoints) + ")"); y += 32;
-    line(y, "Ворота пропущены", std::to_string(r.gatesMissed) + "  (−" + std::to_string(Game::kGatePenalty) + ")"); y += 32;
+    float y = 168;
+    line(y, "Ворота пройдены", std::to_string(r.gatesPassed) + " (+" + std::to_string(Game::kGatePoints) + ")"); y += 32;
+    line(y, "Ворота пропущены", std::to_string(r.gatesMissed) + " (-" + std::to_string(Game::kGatePenalty) + ")"); y += 32;
     line(y, "Деревья", std::to_string(r.treesHit)); y += 32;
-    line(y, "Бонус за финиш", r.finished ? "+" + std::to_string(Game::kFinishBonus) : "—"); y += 44;
+    line(y, "Бонус за финиш", r.finished ? "+" + std::to_string(Game::kFinishBonus) : "—"); y += 48;
     line(y, "Очки за заезд", (r.points >= 0 ? "+" : "") + std::to_string(r.points)); y += 32;
     line(y, "Всего очков", std::to_string(game.score())); y += 32;
     if (r.cashBonus > 0) {
         line(y, "Бонус деньгами", "+$" + std::to_string(r.cashBonus));
     }
-    y = 440;
-    drawText(target, r.skisBroken ? "Новые лыжи — снова в прокате за $10" : "Лыжи целы — сразу к склону",
-             cx, y, 18, true);
-    drawBlinkingText(target, "Enter — дальше", cx, 474, 22);
+    drawText(target, r.skisBroken ? "Лыжи сломаны: прокат $10" : "Лыжи целы — сразу к склону",
+             cx, 432, 16, true);
+    drawBlinkingText(target, "ENTER — ДАЛЬШЕ", cx, 472, 24);
 }
 
 void Renderer::drawGameOver(sf::RenderTarget& target, const Game& game) const {
     const float cx = RoadLevel::kWidth / 2;
-    drawPanel(target, Rect{170, 150, 460, 300});
-    drawText(target, "ДЕНЬГИ КОНЧИЛИСЬ", cx, 172, 36, true);
-    drawText(target, "Очки:    " + std::to_string(game.score()), cx, 250, 24, true);
-    drawText(target, "Заездов: " + std::to_string(game.runsCompleted()), cx, 290, 24, true);
-    drawBlinkingText(target, "Enter — в меню", cx, 380, 22);
+    drawPanel(target, Rect{160, 152, 480, 296});
+    drawText(target, "ДЕНЬГИ КОНЧИЛИСЬ", cx, 184, 24, true);
+    drawText(target, "Очки:    " + std::to_string(game.score()), 224, 256, 24);
+    drawText(target, "Заездов: " + std::to_string(game.runsCompleted()), 224, 296, 24);
+    drawBlinkingText(target, "ENTER — В МЕНЮ", cx, 384, 24);
 }
 
 void Renderer::drawRoad(sf::RenderTarget& target, const RoadLevel& road, bool withPlayer) const {
@@ -213,7 +219,7 @@ void Renderer::drawRoad(sf::RenderTarget& target, const RoadLevel& road, bool wi
     const Rect& shop = road.shop();
     drawRect(target, shop, kShop);
     drawRect(target, Rect{shop.x + shop.width / 2 - 10, shop.y + 10, 20, shop.height - 10}, kShopDoor);
-    drawText(target, "ПРОКАТ $10", shop.x + shop.width + 10, shop.y + 8, 18);
+    drawText(target, "ПРОКАТ $10", shop.x + shop.width + 12, shop.y + 12, 16);
 
     for (const Car& car : road.cars()) {
         drawCar(target, car);
@@ -231,7 +237,7 @@ void Renderer::drawRoad(sf::RenderTarget& target, const RoadLevel& road, bool wi
     if (road.ambulance().isActive()) {
         hint = "Ой! Едет скорая — это будет стоить $10";
     }
-    drawText(target, hint, 10, RoadLevel::kHeight - 30, 18);
+    drawText(target, hint, 8, RoadLevel::kHeight - 28, 16);
 }
 
 void Renderer::drawCar(sf::RenderTarget& target, const Car& car) const {
@@ -305,7 +311,7 @@ void Renderer::drawSlope(sf::RenderTarget& target, const SlopeLevel& slope) cons
             drawRect(target, Rect{i * 20.f, y, 20, 10}, i % 2 ? sf::Color::Black : sf::Color::White);
             drawRect(target, Rect{i * 20.f, y + 10, 20, 10}, i % 2 ? sf::Color::White : sf::Color::Black);
         }
-        drawText(target, "ФИНИШ", SlopeLevel::kWidth / 2, y + 26, 28, true);
+        drawText(target, "ФИНИШ", SlopeLevel::kWidth / 2, y + 28, 32, true);
     }
 
     // ворота: два флажка, как в оригинале — пары по очереди красные и синие;
@@ -341,20 +347,22 @@ void Renderer::drawSlope(sf::RenderTarget& target, const SlopeLevel& slope) cons
     drawRect(target, Rect{s.x + 2, s.y + 4, 4, s.height}, kSkis);
     drawRect(target, Rect{s.x + s.width - 6, s.y + 4, 4, s.height}, kSkis);
 
-    // состояние лыж
-    std::string skis = "Лыжи: ";
+    // состояние лыж: «Лыжи:» и квадратики — целые залиты, сломанные пустые
+    drawText(target, "Лыжи:", SlopeLevel::kWidth - 176, 12, 16);
     for (int i = 0; i < SlopeLevel::kMaxDamage; ++i) {
-        skis += i < SlopeLevel::kMaxDamage - slope.damage() ? "■" : "□";
+        const Rect box{SlopeLevel::kWidth - 88 + i * 24.f, 10, 16, 16};
+        drawRect(target, box, kText);
+        if (i >= SlopeLevel::kMaxDamage - slope.damage()) {
+            drawRect(target, Rect{box.x + 3, box.y + 3, box.width - 6, box.height - 6}, kSnow);
+        }
     }
-    drawText(target, skis, SlopeLevel::kWidth - 170, 8, 20);
-    drawText(target, "← → поворот, ↓ быстрее", 10, SlopeLevel::kScreenHeight - 30, 18);
+    drawText(target, "← → поворот, ↓ быстрее", 8, SlopeLevel::kScreenHeight - 28, 16);
 }
 
 void Renderer::drawHud(sf::RenderTarget& target, const Game& game) const {
-    drawText(target, "$" + std::to_string(game.money()), 10, 8, 22);
-    drawText(target, "Очки: " + std::to_string(game.score()) +
-                         "  (+$10 при " + std::to_string(game.nextCashAt()) + ")",
-             10, 36, 18);
+    drawText(target, "$" + std::to_string(game.money()), 8, 8, 24);
+    drawText(target, "Очки " + std::to_string(game.score()), 8, 40, 16);
+    drawText(target, "+$10 при " + std::to_string(game.nextCashAt()), 8, 60, 8);
 }
 
 void Renderer::drawText(sf::RenderTarget& target, const std::string& utf8, float x, float y,
@@ -367,9 +375,10 @@ void Renderer::drawText(sf::RenderTarget& target, const std::string& utf8, float
     text.setFillColor(kText);
     if (centered) {
         const sf::FloatRect b = text.getLocalBounds();
-        text.setOrigin(b.left + b.width / 2.f, 0.f);
+        text.setOrigin(std::round(b.left + b.width / 2.f), 0.f);
     }
-    text.setPosition(x, y);
+    // Целые координаты: при дробных пиксельный шрифт рисуется неровно
+    text.setPosition(std::round(x), std::round(y));
     target.draw(text);
 }
 

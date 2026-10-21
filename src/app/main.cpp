@@ -46,7 +46,10 @@ int main() {
     window.setFramerateLimit(60);
 
     horace::Renderer renderer;
-    if (!renderer.loadFont(std::string(HORACE_ASSETS_DIR) + "/fonts/DejaVuSansMono.ttf")) {
+    // 8-битный шрифт Press Start 2P (лицензия OFL); если его нет — обычный DejaVu
+    const std::string fonts = std::string(HORACE_ASSETS_DIR) + "/fonts/";
+    if (!renderer.loadFont(fonts + "PressStart2P-Regular.ttf", true) &&
+        !renderer.loadFont(fonts + "DejaVuSansMono.ttf")) {
         std::cerr << "Font not found, text will not be shown\n";
     }
     if (!renderer.loadTextures(std::string(HORACE_ASSETS_DIR) + "/textures")) {
