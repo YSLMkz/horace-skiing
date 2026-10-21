@@ -17,6 +17,7 @@ beeper::Sound soundFor(GameEvent event) {
     case GameEvent::Finished:   return beeper::Sound::Finished;
     case GameEvent::GameOver:   return beeper::Sound::GameOver;
     case GameEvent::BonusMoney: return beeper::Sound::BonusMoney;
+    case GameEvent::Confirm:    return beeper::Sound::GatePassed;  // короткий «вжик»
     }
     return beeper::Sound::Step;
 }

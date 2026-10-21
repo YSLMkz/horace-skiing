@@ -84,10 +84,9 @@ int main() {
                 case sf::Keyboard::N:  // звуки вкл/выкл (если бипер слишком «кислотный»)
                     sounds.toggleMute();
                     break;
-                case sf::Keyboard::R:
-                    if (game.state() == GameState::GameOver) {
-                        game = Game();
-                    }
+                case sf::Keyboard::Enter:  // меню / итоги заезда / конец игры
+                case sf::Keyboard::Space:
+                    game.confirm();
                     break;
                 case sf::Keyboard::Escape: window.close(); break;
                 default: break;

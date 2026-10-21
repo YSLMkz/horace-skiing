@@ -85,17 +85,23 @@ void Renderer::draw(sf::RenderTarget& target, const Game& game) const {
     const float h = RoadLevel::kHeight;
 
     switch (game.state()) {
+    case GameState::Menu:
+        drawRoad(target, game.road(), false);  // на фоне едут машины
+        drawMenu(target);
+        return;                         // без HUD
     case GameState::Road:
         drawRoad(target, game.road());
         break;
     case GameState::Slope:
         drawSlope(target, game.slope());
         break;
+    case GameState::RunResults:
+        drawSlope(target, game.slope());  // склон «замер» на фоне
+        drawRunResults(target, game);
+        break;
     case GameState::GameOver:
         drawRoad(target, game.road());
-        drawRect(target, Rect{0, h / 2 - 70, w, 140}, sf::Color(255, 255, 255, 220));
-        drawText(target, "ДЕНЬГИ КОНЧИЛИСЬ", w / 2, h / 2 - 50, 40, true);
-        drawText(target, "R — начать заново, Esc — выход", w / 2, h / 2 + 10, 20, true);
+        drawGameOver(target, game);
         break;
     }
     drawHud(target, game);
@@ -107,7 +113,89 @@ void Renderer::draw(sf::RenderTarget& target, const Game& game) const {
     }
 }
 
-void Renderer::drawRoad(sf::RenderTarget& target, const RoadLevel& road) const {
+void Renderer::drawPanel(sf::RenderTarget& target, const Rect& r) const {
+    sf::RectangleShape panel({r.width, r.height});
+    panel.setPosition(r.x, r.y);
+    panel.setFillColor(sf::Color(250, 250, 255, 248));
+    panel.setOutlineColor(kText);
+    panel.setOutlineThickness(3.f);
+    target.draw(panel);
+}
+
+void Renderer::drawBlinkingText(sf::RenderTarget& target, const std::string& utf8, float x, float y,
+                                unsigned size) const {
+    // 0.6 с видно, 0.3 с нет
+    if (std::fmod(clock_.getElapsedTime().asSeconds(), 0.9f) < 0.6f) {
+        drawText(target, utf8, x, y, size, true);
+    }
+}
+
+void Renderer::drawMenu(sf::RenderTarget& target) const {
+    const float cx = RoadLevel::kWidth / 2;
+    drawPanel(target, Rect{90, 70, 620, 460});
+
+    drawText(target, "HORACE GOES SKIING", cx, 92, 44, true);
+    drawText(target, "аналог игры для ZX Spectrum (1982) · курсовая работа", cx, 150, 16, true);
+
+    float y = 200;
+    const float left = 130;
+    for (const char* line : {
+             "Перейди дорогу, возьми лыжи напрокат,",
+             "вернись и съезжай со склона между флажками.",
+             "",
+             "Старт: $40.  Лыжи — $10.  Скорая — $10.",
+             "Ворота +10, пропуск −10, финиш +100.",
+             "Каждые 1000 очков — ещё $10.",
+             "",
+             "Дорога:  стрелки — шаг",
+             "Склон:   ← → поворот,  ↓ быстрее",
+             "P пауза   M музыка   N звуки   Esc выход",
+         }) {
+        drawText(target, line, left, y, 18);
+        y += 26;
+    }
+    drawBlinkingText(target, "Нажмите Enter", cx, 480, 26);
+}
+
+void Renderer::drawRunResults(sf::RenderTarget& target, const Game& game) const {
+    const RunStats& r = game.lastRun();
+    const float cx = RoadLevel::kWidth / 2;
+    drawPanel(target, Rect{150, 80, 500, 440});
+
+    const std::string title = "ЗАЕЗД " + std::to_string(r.number) +
+                              (r.finished ? ": ФИНИШ!" : ": ЛЫЖИ СЛОМАНЫ");
+    drawText(target, title, cx, 100, 32, true);
+
+    auto line = [&](float y, const std::string& label, const std::string& value) {
+        drawText(target, label, 190, y, 20);
+        drawText(target, value, 480, y, 20);
+    };
+    float y = 165;
+    line(y, "Ворота пройдены", std::to_string(r.gatesPassed) + "  (+" + std::to_string(Game::kGatePoints) + ")"); y += 32;
+    line(y, "Ворота пропущены", std::to_string(r.gatesMissed) + "  (−" + std::to_string(Game::kGatePenalty) + ")"); y += 32;
+    line(y, "Деревья", std::to_string(r.treesHit)); y += 32;
+    line(y, "Бонус за финиш", r.finished ? "+" + std::to_string(Game::kFinishBonus) : "—"); y += 44;
+    line(y, "Очки за заезд", (r.points >= 0 ? "+" : "") + std::to_string(r.points)); y += 32;
+    line(y, "Всего очков", std::to_string(game.score())); y += 32;
+    if (r.cashBonus > 0) {
+        line(y, "Бонус деньгами", "+$" + std::to_string(r.cashBonus));
+    }
+    y = 440;
+    drawText(target, r.skisBroken ? "Новые лыжи — снова в прокате за $10" : "Лыжи целы — сразу к склону",
+             cx, y, 18, true);
+    drawBlinkingText(target, "Enter — дальше", cx, 474, 22);
+}
+
+void Renderer::drawGameOver(sf::RenderTarget& target, const Game& game) const {
+    const float cx = RoadLevel::kWidth / 2;
+    drawPanel(target, Rect{170, 150, 460, 300});
+    drawText(target, "ДЕНЬГИ КОНЧИЛИСЬ", cx, 172, 36, true);
+    drawText(target, "Очки:    " + std::to_string(game.score()), cx, 250, 24, true);
+    drawText(target, "Заездов: " + std::to_string(game.runsCompleted()), cx, 290, 24, true);
+    drawBlinkingText(target, "Enter — в меню", cx, 380, 22);
+}
+
+void Renderer::drawRoad(sf::RenderTarget& target, const RoadLevel& road, bool withPlayer) const {
     const float cell = RoadLevel::kCell;
 
     // асфальт (строки 4..10): пунктир между полосами одного направления,
@@ -131,6 +219,9 @@ void Renderer::drawRoad(sf::RenderTarget& target, const RoadLevel& road) const {
         drawCar(target, car);
     }
 
+    if (!withPlayer) {
+        return;
+    }
     drawHorace(target, road);
     if (road.ambulance().isActive()) {
         drawAmbulance(target, road.ambulance());

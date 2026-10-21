@@ -6,6 +6,27 @@ namespace horace {
 
 Game::Game() = default;
 
+void Game::confirm() {
+    switch (state_) {
+    case GameState::Menu:
+        state_ = GameState::Road;
+        road_.startFromBottom();  // пока было меню, по дороге просто ездили машины
+        emit(GameEvent::Confirm);
+        break;
+    case GameState::RunResults:
+        continueAfterResults();
+        emit(GameEvent::Confirm);
+        break;
+    case GameState::GameOver:
+        *this = Game();  // всё с нуля — снова стартовое меню
+        emit(GameEvent::Confirm);
+        break;
+    case GameState::Road:
+    case GameState::Slope:
+        break;  // во время игры Enter ничего не делает
+    }
+}
+
 std::vector<GameEvent> Game::takeEvents() {
     return std::exchange(events_, {});  // отдать список и оставить пустой
 }
@@ -29,7 +50,7 @@ void Game::setTuck(bool tuck) {
 }
 
 void Game::togglePause() {
-    if (state_ != GameState::GameOver) {
+    if (state_ == GameState::Road || state_ == GameState::Slope) {
         paused_ = !paused_;
     }
 }
@@ -53,9 +74,18 @@ void Game::update(float dt) {
         return;
     }
     switch (state_) {
-    case GameState::Road:     updateRoad(dt);  break;
-    case GameState::Slope:    updateSlope(dt); break;
-    case GameState::GameOver: break;
+    case GameState::Menu:
+        road_.update(dt);  // фон меню: по дороге ездят машины (Хорас стоит на тротуаре)
+        break;
+    case GameState::Road:
+        updateRoad(dt);
+        break;
+    case GameState::Slope:
+        updateSlope(dt);
+        break;
+    case GameState::RunResults:
+    case GameState::GameOver:
+        break;
     }
 }
 
@@ -73,17 +103,21 @@ void Game::updateSlope(float dt) {
     for (SlopeEvent event : slope_.update(dt)) {
         switch (event) {
         case SlopeEvent::PassedGate:
+            ++run_.gatesPassed;
             emit(GameEvent::GatePassed);
             addScore(kGatePoints);
             break;
         case SlopeEvent::MissedGate:
+            ++run_.gatesMissed;
             emit(GameEvent::GateMissed);  // в оригинале — предупреждающий сигнал и штраф
             addScore(-kGatePenalty);
             break;
         case SlopeEvent::HitTree:
+            ++run_.treesHit;
             emit(GameEvent::TreeHit);     // урон лыжам SlopeLevel считает сам
             break;
         case SlopeEvent::Finished:
+            run_.finished = true;
             emit(GameEvent::Finished);
             addScore(kFinishBonus);
             finishRun(false);
@@ -99,6 +133,9 @@ void Game::updateSlope(float dt) {
 void Game::startSlope() {
     state_ = GameState::Slope;
     slope_.startRun(nextCourseSeed_++);  // каждый заезд — новая трасса
+    run_ = RunStats{};
+    runStartScore_ = score_;
+    runStartMoney_ = money_;
 }
 
 void Game::finishRun(bool skisBroken) {
@@ -106,9 +143,19 @@ void Game::finishRun(bool skisBroken) {
         return;
     }
     ++runsCompleted_;
+    run_.number = runsCompleted_;
+    run_.skisBroken = skisBroken;
+    run_.points = score_ - runStartScore_;
+    run_.cashBonus = money_ - runStartMoney_;
+    lastRun_ = run_;
+    paused_ = false;
+    state_ = GameState::RunResults;
+}
+
+void Game::continueAfterResults() {
     state_ = GameState::Road;
     road_.placeAtShop();
-    if (!skisBroken) {
+    if (!lastRun_.skisBroken) {
         road_.giveSkis();  // лыжи целы — сразу идём обратно к склону
     }
     // сломаны — Хорас стоит у двери лавки и должен зайти за новыми

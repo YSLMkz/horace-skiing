@@ -13,9 +13,12 @@ using horace::RoadLevel;
 
 namespace {
 
+// Новая игра, уже начатая из меню (Enter), с пустой дорогой
 Game gameWithEmptyRoad() {
     Game game;
+    game.confirm();
     game.road().clearCars();
+    game.takeEvents();
     return game;
 }
 
@@ -57,11 +60,33 @@ void goToSlope(Game& game) {
 
 } // namespace
 
-TEST(GameTest, StartsOnRoadWithStartMoney) {
+TEST(GameTest, StartsInMenu) {
     Game game;
-    EXPECT_EQ(game.state(), GameState::Road);
+    EXPECT_EQ(game.state(), GameState::Menu);
     EXPECT_EQ(game.money(), Game::kStartMoney);
     EXPECT_EQ(game.score(), 0);
+}
+
+TEST(GameTest, EnterInMenuStartsOnRoad) {
+    Game game;
+    game.confirm();
+    EXPECT_EQ(game.state(), GameState::Road);
+    EXPECT_FLOAT_EQ(game.road().horace().bounds().y, RoadLevel::kBottomY);
+}
+
+TEST(GameTest, CannotWalkInMenu) {
+    Game game;
+    const float y = game.road().horace().bounds().y;
+    game.moveHorace(Direction::Up);
+    EXPECT_FLOAT_EQ(game.road().horace().bounds().y, y);
+}
+
+TEST(GameTest, TrafficMovesInMenuBackground) {
+    Game game;
+    const float x = game.road().cars()[0].bounds().x;
+    game.update(0.5f);
+    EXPECT_NE(game.road().cars()[0].bounds().x, x);
+    EXPECT_EQ(game.state(), GameState::Menu);
 }
 
 TEST(GameTest, AmbulanceIsPaidOnlyAfterItLeaves) {
@@ -114,6 +139,8 @@ TEST(GameTest, AfterRunWithIntactSkisHoraceIsAtShopWithSkis) {
     goToSlope(game);
     const int moneyBefore = game.money();
     game.finishRun(false);
+    EXPECT_EQ(game.state(), GameState::RunResults);  // сначала итоги
+    game.confirm();
     EXPECT_EQ(game.state(), GameState::Road);
     EXPECT_TRUE(game.road().hasSkis());
     EXPECT_FLOAT_EQ(game.road().horace().bounds().y, RoadLevel::kShopDoorY);
@@ -125,6 +152,7 @@ TEST(GameTest, AfterRunWithBrokenSkisMustRentAgain) {
     goToSlope(game);
     const int moneyBefore = game.money();
     game.finishRun(true);
+    game.confirm();
     EXPECT_FALSE(game.road().hasSkis());
 
     walk(game, Direction::Up, 1);  // шаг от двери в лавку
@@ -196,6 +224,8 @@ TEST(GameTest, FinishGivesBonusAndKeepsSkis) {
     const int moneyBefore = game.money();
     game.slope().startEmptyRun(1000);
     rideWhileOnSlope(game);
+    EXPECT_EQ(game.state(), GameState::RunResults);
+    game.confirm();
     EXPECT_EQ(game.state(), GameState::Road);
     EXPECT_EQ(game.score(), Game::kFinishBonus);
     EXPECT_TRUE(game.road().hasSkis());
@@ -212,7 +242,8 @@ TEST(GameTest, BrokenSkisEndRunWithoutBonus) {
         game.slope().addTree(x, 300 + i * 200.f);
     }
     rideWhileOnSlope(game);
-    EXPECT_EQ(game.state(), GameState::Road);
+    EXPECT_EQ(game.state(), GameState::RunResults);
+    game.confirm();
     EXPECT_EQ(game.score(), 0);
     EXPECT_FALSE(game.road().hasSkis());
 }
@@ -222,6 +253,7 @@ TEST(GameTest, EachRunHasNewCourse) {
     goToSlope(game);
     const float firstGateX = game.slope().gates()[0].leftX;
     game.finishRun(false);
+    game.confirm();           // экран итогов -> дорога
     game.road().clearCars();  // после заезда трафик на дороге начинается заново — убираем
     walk(game, Direction::Down, kRowsDoorToBottom);  // лыжи целы — сразу вниз
     ASSERT_EQ(game.state(), GameState::Slope);
@@ -414,4 +446,83 @@ TEST(GameRulesTest, CannotPauseAfterGameOver) {
     loseAllMoney(game);
     game.togglePause();
     EXPECT_FALSE(game.isPaused());
+}
+
+// ---------------------------------------------------------------------------
+// Итоги заезда и конец игры
+// ---------------------------------------------------------------------------
+
+TEST(RunResultsTest, StatsAreCounted) {
+    Game game = gameWithEmptyRoad();
+    goToSlope(game);
+    game.slope().startEmptyRun(1500);
+    const float cx = skierCenterX(game);
+    game.slope().addGate(300, cx);          // пройдём
+    game.slope().addGate(500, cx);          // пройдём
+    game.slope().addGate(700, cx + 300);    // пропустим
+    game.slope().addTree(game.slope().skier().x, 900);  // врежемся
+    rideWhileOnSlope(game);
+    ASSERT_EQ(game.state(), GameState::RunResults);
+    const horace::RunStats& r = game.lastRun();
+    EXPECT_EQ(r.number, 1);
+    EXPECT_EQ(r.gatesPassed, 2);
+    EXPECT_EQ(r.gatesMissed, 1);
+    EXPECT_EQ(r.treesHit, 1);
+    EXPECT_TRUE(r.finished);
+    EXPECT_FALSE(r.skisBroken);
+    EXPECT_EQ(r.points, 2 * Game::kGatePoints - Game::kGatePenalty + Game::kFinishBonus);
+}
+
+TEST(RunResultsTest, BrokenSkisAreReported) {
+    Game game = gameWithEmptyRoad();
+    goToSlope(game);
+    game.slope().startEmptyRun(10000);
+    const float x = game.slope().skier().x;
+    for (int i = 0; i < horace::SlopeLevel::kMaxDamage; ++i) {
+        game.slope().addTree(x, 300 + i * 200.f);
+    }
+    rideWhileOnSlope(game);
+    EXPECT_TRUE(game.lastRun().skisBroken);
+    EXPECT_FALSE(game.lastRun().finished);
+    EXPECT_EQ(game.lastRun().treesHit, horace::SlopeLevel::kMaxDamage);
+}
+
+TEST(RunResultsTest, NothingMovesOnResultsScreen) {
+    Game game = gameWithEmptyRoad();
+    goToSlope(game);
+    game.finishRun(false);
+    const int money = game.money();
+    game.update(5.f);
+    game.moveHorace(Direction::Up);
+    EXPECT_EQ(game.state(), GameState::RunResults);
+    EXPECT_EQ(game.money(), money);
+}
+
+TEST(RunResultsTest, SecondRunHasNumberTwo) {
+    Game game = gameWithEmptyRoad();
+    goToSlope(game);
+    game.finishRun(false);
+    game.confirm();
+    game.road().clearCars();
+    walk(game, Direction::Down, kRowsDoorToBottom);
+    ASSERT_EQ(game.state(), GameState::Slope);
+    game.finishRun(false);
+    EXPECT_EQ(game.lastRun().number, 2);
+}
+
+TEST(GameOverTest, EnterReturnsToFreshMenu) {
+    Game game = gameWithEmptyRoad();
+    loseAllMoney(game);
+    ASSERT_EQ(game.state(), GameState::GameOver);
+    game.confirm();
+    EXPECT_EQ(game.state(), GameState::Menu);
+    EXPECT_EQ(game.money(), Game::kStartMoney);
+    EXPECT_EQ(game.score(), 0);
+    EXPECT_EQ(game.runsCompleted(), 0);
+}
+
+TEST(GameOverTest, EnterDoesNothingDuringPlay) {
+    Game game = gameWithEmptyRoad();
+    game.confirm();
+    EXPECT_EQ(game.state(), GameState::Road);
 }
