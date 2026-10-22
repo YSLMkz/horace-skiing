@@ -7,6 +7,7 @@
 #include <SFML/Graphics/Texture.hpp>
 #include <SFML/System/Clock.hpp>
 
+#include <map>
 #include <string>
 #include <vector>
 
@@ -19,7 +20,9 @@ public:
     // Возвращает false, если шрифт не найден (тогда текст просто не рисуется).
     // pixelFont = true — пиксельный шрифт: рисуется без сглаживания.
     bool loadFont(const std::string& path, bool pixelFont = false);
-    // Возвращает false, если каких-то текстур нет (тогда вместо них — прямоугольники)
+    // Возвращает false, если каких-то текстур нет (тогда вместо них — прямоугольники).
+    // Спрайты героя, лыжника, ёлок, флажка и лавки необязательны: какого файла
+    // нет, то и рисуется по-старому, прямоугольниками.
     bool loadTextures(const std::string& dir);
 
     void draw(sf::RenderTarget& target, const Game& game) const;
@@ -53,6 +56,8 @@ private:
     std::vector<sf::Texture> carTextures_;  // по одной на модель машины (Car::model())
     sf::Texture ambulanceFrames_[2];        // два кадра мигалки
     bool hasAmbulanceTextures_ = false;
+    std::map<std::string, sf::Texture> sprites_;  // необязательные спрайты по имени файла
+    const sf::Texture* sprite(const std::string& name) const;  // nullptr — файла нет
 };
 
 } // namespace horace

@@ -67,6 +67,7 @@ public:
     // Управление: dir = -1 влево, 0 прямо, +1 вправо; tuck — ускориться
     void setSteer(int dir) { steer_ = dir; }
     void setTuck(bool tuck) { tuck_ = tuck; }
+    int steer() const { return steer_; }  // куда сейчас поворачивает (для рисования)
 
     std::vector<SlopeEvent> update(float dt);
 

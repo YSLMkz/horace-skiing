@@ -33,8 +33,12 @@ void drawRect(sf::RenderTarget& target, const Rect& r, sf::Color color) {
 
 // Рисует текстуру, растянутую на прямоугольник r.
 // flipped — отразить по горизонтали (машина едет влево, а нарисована мордой вправо).
-void drawSprite(sf::RenderTarget& target, const sf::Texture& texture, const Rect& r, bool flipped) {
+// color — «перекрасить»: цвета картинки умножаются на него (белое станет color,
+// тёмное останется тёмным). Так один белый флажок становится красным или синим.
+void drawSprite(sf::RenderTarget& target, const sf::Texture& texture, const Rect& r, bool flipped,
+                sf::Color color = sf::Color::White) {
     sf::Sprite sprite(texture);
+    sprite.setColor(color);
     const sf::Vector2u size = texture.getSize();
     const float sx = r.width / static_cast<float>(size.x);
     const float sy = r.height / static_cast<float>(size.y);
@@ -81,7 +85,23 @@ bool Renderer::loadTextures(const std::string& dir) {
 
     hasAmbulanceTextures_ = ambulanceFrames_[0].loadFromFile(dir + "/ambulance_1.png") &&
                             ambulanceFrames_[1].loadFromFile(dir + "/ambulance_2.png");
+
+    // Необязательные спрайты: что нашлось — то и рисуем
+    sprites_.clear();
+    for (const char* name : {"hero_walk_1", "hero_walk_2", "hero_skis_1", "hero_skis_2", "hero_down",
+                             "skier_straight", "skier_turn", "skier_crash",
+                             "tree", "tree_hit", "flag", "shop"}) {
+        sf::Texture texture;
+        if (texture.loadFromFile(dir + "/" + name + ".png")) {
+            sprites_[name] = texture;
+        }
+    }
     return ok && hasAmbulanceTextures_;
+}
+
+const sf::Texture* Renderer::sprite(const std::string& name) const {
+    const auto it = sprites_.find(name);
+    return it == sprites_.end() ? nullptr : &it->second;
 }
 
 void Renderer::draw(sf::RenderTarget& target, const Game& game) const {
@@ -293,8 +313,12 @@ void Renderer::drawRoad(sf::RenderTarget& target, const RoadLevel& road, bool wi
 
     // лавка проката с дверью
     const Rect& shop = road.shop();
-    drawRect(target, shop, kShop);
-    drawRect(target, Rect{shop.x + shop.width / 2 - 10, shop.y + 10, 20, shop.height - 10}, kShopDoor);
+    if (const sf::Texture* t = sprite("shop")) {
+        drawSprite(target, *t, shop, false);
+    } else {
+        drawRect(target, shop, kShop);
+        drawRect(target, Rect{shop.x + shop.width / 2 - 10, shop.y + 10, 20, shop.height - 10}, kShopDoor);
+    }
     drawText(target, "ПРОКАТ $10", shop.x + shop.width + 12, shop.y + 12, 16);
 
     for (const Car& car : road.cars()) {
@@ -332,10 +356,14 @@ void Renderer::drawHorace(sf::RenderTarget& target, const RoadLevel& road) const
     const Rect& hb = road.horace().bounds();
 
     if (road.isHoraceKnockedDown()) {
-        // лежит на дороге: плоский прямоугольник внизу клетки
-        drawRect(target, Rect{hb.x - 4, hb.y + hb.height - 14, hb.width + 8, 14}, kHorace);
-        if (road.hasSkis()) {
-            drawRect(target, Rect{hb.x - 10, hb.y + hb.height - 4, hb.width + 20, 4}, kSkis);
+        if (const sf::Texture* t = sprite("hero_down")) {
+            drawSprite(target, *t, hb, false);
+        } else {
+            // лежит на дороге: плоский прямоугольник внизу клетки
+            drawRect(target, Rect{hb.x - 4, hb.y + hb.height - 14, hb.width + 8, 14}, kHorace);
+            if (road.hasSkis()) {
+                drawRect(target, Rect{hb.x - 10, hb.y + hb.height - 4, hb.width + 20, 4}, kSkis);
+            }
         }
         // «звёздочки» над головой мигают
         const float t = road.ambulance().time();
@@ -349,6 +377,15 @@ void Renderer::drawHorace(sf::RenderTarget& target, const RoadLevel& road) const
         return;
     }
 
+    // Анимация шага: Хорас ходит по клеткам, и с каждым шагом сумма его клеток
+    // по x и y меняет чётность — значит, кадры 1 и 2 чередуются сами собой
+    const int frame = static_cast<int>((hb.x + hb.y) / RoadLevel::kCell) % 2;
+    const char* name = road.hasSkis() ? (frame ? "hero_skis_2" : "hero_skis_1")
+                                      : (frame ? "hero_walk_2" : "hero_walk_1");
+    if (const sf::Texture* t = sprite(name)) {
+        drawSprite(target, *t, hb, false);
+        return;
+    }
     drawRect(target, hb, kHorace);
     if (road.hasSkis()) {
         // лыжи на плече — две синие полоски
@@ -398,6 +435,13 @@ void Renderer::drawSlope(sf::RenderTarget& target, const SlopeLevel& slope) cons
         if (!visible(gate.y)) continue;
         sf::Color flag = i % 2 == 0 ? kFlag : kFlagBlue;
         if (gate.resolved && !gate.passed) flag = sf::Color(160, 160, 160);
+        if (const sf::Texture* t = sprite("flag")) {
+            // белый флажок 8x16, увеличенный вдвое; древко — на краю ворот
+            for (float x : {gate.leftX - 3, gate.rightX - 3}) {
+                drawSprite(target, *t, toScreen(Rect{x, gate.y - 32, 16, 32}), false, flag);
+            }
+            continue;
+        }
         for (float x : {gate.leftX - 4, gate.rightX - 4}) {
             drawRect(target, toScreen(Rect{x + 3, gate.y - 30, 2, 30}), sf::Color(60, 60, 60));  // древко
             drawRect(target, toScreen(Rect{x + 5, gate.y - 30, 14, 10}), flag);                 // флажок
@@ -408,6 +452,12 @@ void Renderer::drawSlope(sf::RenderTarget& target, const SlopeLevel& slope) cons
     for (const Tree& tree : slope.trees()) {
         if (!visible(tree.bounds.y)) continue;
         const Rect r = toScreen(tree.bounds);
+        const sf::Texture* t = sprite(tree.hit ? "tree_hit" : "tree");
+        if (!t) t = sprite("tree");  // задетой ёлки может не быть — тогда обычная
+        if (t) {
+            drawSprite(target, *t, r, false);
+            continue;
+        }
         sf::ConvexShape crown(3);
         crown.setPoint(0, {r.x + r.width / 2, r.y});
         crown.setPoint(1, {r.x, r.y + r.height - 8});
@@ -417,11 +467,23 @@ void Renderer::drawSlope(sf::RenderTarget& target, const SlopeLevel& slope) cons
         drawRect(target, Rect{r.x + r.width / 2 - 3, r.y + r.height - 8, 6, 8}, kShopDoor);
     }
 
-    // лыжник: тело + две лыжи вниз; после удара о дерево — серый
+    // лыжник: упал / поворачивает / едет прямо. Поворот нарисован вправо,
+    // влево — тот же спрайт, отражённый зеркально.
     const Rect s = toScreen(slope.skier());
-    drawRect(target, Rect{s.x + 3, s.y, s.width - 6, s.height - 6}, slope.isCrashed() ? sf::Color(150, 150, 150) : kHorace);
-    drawRect(target, Rect{s.x + 2, s.y + 4, 4, s.height}, kSkis);
-    drawRect(target, Rect{s.x + s.width - 6, s.y + 4, 4, s.height}, kSkis);
+    const char* skierName = slope.isCrashed()     ? "skier_crash"
+                            : slope.steer() != 0  ? "skier_turn"
+                                                  : "skier_straight";
+    const sf::Texture* skierTexture = sprite(skierName);
+    if (!skierTexture) skierTexture = sprite("skier_straight");
+    if (skierTexture) {
+        drawSprite(target, *skierTexture, s, !slope.isCrashed() && slope.steer() < 0);
+    } else {
+        // запасной вариант: тело + две лыжи вниз; после удара о дерево — серый
+        drawRect(target, Rect{s.x + 3, s.y, s.width - 6, s.height - 6},
+                 slope.isCrashed() ? sf::Color(150, 150, 150) : kHorace);
+        drawRect(target, Rect{s.x + 2, s.y + 4, 4, s.height}, kSkis);
+        drawRect(target, Rect{s.x + s.width - 6, s.y + 4, 4, s.height}, kSkis);
+    }
 
     // состояние лыж: «Лыжи:» и квадратики — целые залиты, сломанные пустые
     drawText(target, "Лыжи:", SlopeLevel::kWidth - 176, 12, 16);
