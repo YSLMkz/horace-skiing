@@ -319,7 +319,7 @@ void Renderer::drawRoad(sf::RenderTarget& target, const RoadLevel& road, bool wi
         drawRect(target, shop, kShop);
         drawRect(target, Rect{shop.x + shop.width / 2 - 10, shop.y + 10, 20, shop.height - 10}, kShopDoor);
     }
-    drawText(target, "ПРОКАТ $10", shop.x + shop.width + 12, shop.y + 12, 16);
+    drawText(target, "ПРОКАТ $10", shop.x + shop.width + 12, shop.y + shop.height / 2 - 8, 16);
 
     for (const Car& car : road.cars()) {
         drawCar(target, car);
@@ -333,7 +333,8 @@ void Renderer::drawRoad(sf::RenderTarget& target, const RoadLevel& road, bool wi
         drawAmbulance(target, road.ambulance());
     }
 
-    const char* hint = road.hasSkis() ? "Лыжи есть! Вниз, к склону" : "Дойди до лавки за лыжами";
+    // Подсказки короткие: герой стоит внизу по центру, текст не должен до него доставать
+    const char* hint = road.hasSkis() ? "Лыжи есть! Вниз!" : "Иди к лавке за лыжами";
     if (road.ambulance().isActive()) {
         hint = "Ой! Едет скорая, это будет стоить $10";
     }
@@ -355,9 +356,14 @@ void Renderer::drawHorace(sf::RenderTarget& target, const RoadLevel& road) const
     }
     const Rect& hb = road.horace().bounds();
 
+    // Картинка героя крупнее его клетки (48x48 вместо 40x40): немного выступает
+    // вверх и в стороны, а столкновения по-прежнему считаются по клетке 40x40.
+    // Так герой лучше смотрится рядом с машинами, а сбивают его по-честному.
+    const Rect look{hb.x - 4, hb.y - 8, hb.width + 8, hb.height + 8};
+
     if (road.isHoraceKnockedDown()) {
         if (const sf::Texture* t = sprite("hero_down")) {
-            drawSprite(target, *t, hb, false);
+            drawSprite(target, *t, look, false);
         } else {
             // лежит на дороге: плоский прямоугольник внизу клетки
             drawRect(target, Rect{hb.x - 4, hb.y + hb.height - 14, hb.width + 8, 14}, kHorace);
@@ -383,7 +389,7 @@ void Renderer::drawHorace(sf::RenderTarget& target, const RoadLevel& road) const
     const char* name = road.hasSkis() ? (frame ? "hero_skis_2" : "hero_skis_1")
                                       : (frame ? "hero_walk_2" : "hero_walk_1");
     if (const sf::Texture* t = sprite(name)) {
-        drawSprite(target, *t, hb, false);
+        drawSprite(target, *t, look, false);
         return;
     }
     drawRect(target, hb, kHorace);

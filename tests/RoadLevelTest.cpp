@@ -41,8 +41,10 @@ bool waitForAmbulance(RoadLevel& road) {
     return false;
 }
 
-const int kRowsBottomToShop = static_cast<int>(RoadLevel::kBottomY / RoadLevel::kCell);       // 14
-const int kRowsDoorToBottom = static_cast<int>((RoadLevel::kBottomY - RoadLevel::kShopDoorY) / RoadLevel::kCell); // 13
+// шагов от старта до нижнего края лавки
+const int kRowsBottomToShop = static_cast<int>(
+    (RoadLevel::kBottomY - (RoadLevel::kShopHeight - RoadLevel::kCell)) / RoadLevel::kCell);
+const int kRowsDoorToBottom = static_cast<int>((RoadLevel::kBottomY - RoadLevel::kShopDoorY) / RoadLevel::kCell);
 
 } // namespace
 

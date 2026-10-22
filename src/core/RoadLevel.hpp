@@ -23,7 +23,7 @@ enum class RoadEvent {
 // Уровень «Дорога»: Хорас, машины и лавка проката лыж.
 //
 // Поле — сетка 20 x 15 клеток по 40 px:
-//   строка 0      — лавка (по центру)
+//   строки 0..1   — лавка (по центру), строка 2 — у её двери
 //   строки 4..10  — дорога: полосы 4 и 6 едут вправо, 8 и 10 — влево
 //   строка 14     — старт, отсюда же вход на склон
 //
@@ -89,7 +89,9 @@ public:
     // Координаты, которые нужны и логике, и тестам
     static constexpr float kStartX     = kWidth / 2.f - kCell / 2.f;  // по центру
     static constexpr float kBottomY    = kHeight - kCell;             // нижняя строка
-    static constexpr float kShopDoorY  = kCell;                       // строка под лавкой
+    static constexpr float kShopHeight = 2 * kCell;                   // лавка — две клетки в высоту
+    static constexpr float kShopWidth  = 5 * kCell;                   // и пять в ширину
+    static constexpr float kShopDoorY  = kShopHeight;                 // строка под лавкой
 
 private:
     void respawnAfterHit();

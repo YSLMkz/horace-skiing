@@ -49,8 +49,11 @@ void loseAllMoney(Game& game) {
     }
 }
 
-const int kRowsBottomToShop = 14;
-const int kRowsDoorToBottom = 13;
+// Сколько шагов от старта до лавки и от двери лавки до склона — из размеров поля
+const int kRowsBottomToShop = static_cast<int>(
+    (RoadLevel::kBottomY - (RoadLevel::kShopHeight - RoadLevel::kCell)) / RoadLevel::kCell);
+const int kRowsDoorToBottom = static_cast<int>(
+    (RoadLevel::kBottomY - RoadLevel::kShopDoorY) / RoadLevel::kCell);
 
 // Довести игру до склона: дойти до лавки, взять лыжи, спуститься вниз
 void goToSlope(Game& game) {
